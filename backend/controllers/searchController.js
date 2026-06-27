@@ -1,5 +1,4 @@
 import Teacher from '../models/Teacher.js';
-import Notice from '../models/Notice.js';
 
 export const globalSearch = async (req, res, next) => {
   try {
@@ -15,17 +14,10 @@ export const globalSearch = async (req, res, next) => {
       $or: [{ fullName: regex }, { department: regex }, { subjects: { $in: [regex] } }]
     }).limit(5).select('fullName department profileImage');
 
-
-
-    const notices = await Notice.find({
-      $or: [{ title: regex }, { content: regex }]
-    }).limit(5).select('title createdAt');
-
     res.status(200).json({
       success: true,
       data: {
-        teachers,
-        notices
+        teachers
       }
     });
   } catch (error) {

@@ -18,7 +18,7 @@ import authRoutes from './routes/auth.js';
 import teacherRoutes from './routes/teachers.js';
 import attendanceRoutes from './routes/attendance.js';
 import salaryRoutes from './routes/salary.js';
-import noticeRoutes from './routes/notices.js';
+
 import dashboardRoutes from './routes/dashboard.js';
 import profileRoutes from './routes/profile.js';
 import searchRoutes from './routes/search.js';
@@ -70,7 +70,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/teachers', teacherRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/salary', salaryRoutes);
-app.use('/api/notices', noticeRoutes);
+
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/search', searchRoutes);

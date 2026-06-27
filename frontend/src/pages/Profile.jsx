@@ -9,7 +9,7 @@ import api from '../services/api';
 import { motion } from 'framer-motion';
 
 export default function Profile() {
-  const { user, login } = useAuth(); // Assuming login or updateUser can be used to refresh auth context if needed
+  const { user, login, updateProfileData } = useAuth(); // Assuming login or updateUser can be used to refresh auth context if needed
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
   const [previewUrl, setPreviewUrl] = useState(user?.profileImage ? `http://localhost:5001${user.profileImage}` : '');
@@ -31,13 +31,36 @@ export default function Profile() {
     }
   };
 
+  const handleUploadImage = async () => {
+    if (!selectedFile) return;
+    try {
+      setIsLoading(true);
+      const uploadData = new FormData();
+      uploadData.append('image', selectedFile);
+      const res = await api.post('/profile/upload', uploadData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        updateProfileData({ profileImage: res.data.data });
+        showSuccess('Profile image updated successfully!');
+        setSelectedFile(null); // Hide the button after successful upload
+      }
+    } catch (err) {
+      showError('Failed to upload image');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     try {
       setIsLoading(true);
-      // Not actually implemented fully in backend unless we have a /users/me endpoint.
-      // Assuming you just want UI mostly, or we could just show a success for demo.
-      showSuccess('Profile updated successfully!');
+      const res = await api.put('/profile', { name: formData.name });
+      if (res.data.success) {
+        updateProfileData({ name: formData.name });
+        showSuccess('Profile updated successfully!');
+      }
     } catch (error) {
       showError('Failed to update profile');
     } finally {
@@ -52,11 +75,16 @@ export default function Profile() {
     }
     try {
       setIsLoading(true);
-      // Wait for backend implementation if it exists, otherwise mock
-      showSuccess('Password changed successfully!');
-      setFormData({...formData, currentPassword: '', newPassword: '', confirmPassword: ''});
+      const res = await api.put('/profile/password', {
+        currentPassword: formData.currentPassword,
+        newPassword: formData.newPassword
+      });
+      if (res.data.success) {
+        showSuccess('Password changed successfully!');
+        setFormData({...formData, currentPassword: '', newPassword: '', confirmPassword: ''});
+      }
     } catch (error) {
-      showError('Failed to change password');
+      showError(error.response?.data?.message || 'Failed to change password');
     } finally {
       setIsLoading(false);
     }
@@ -76,7 +104,7 @@ export default function Profile() {
         <div className="lg:col-span-1">
           <Card glass className="h-full">
             <CardBody className="p-8 flex flex-col items-center text-center">
-              <div className="relative group cursor-pointer mb-6" onClick={() => fileInputRef.current?.click()}>
+              <div className="relative group cursor-pointer mb-2" onClick={() => fileInputRef.current?.click()}>
                 <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-emerald-100 dark:border-emerald-900/30 shadow-xl bg-slate-100 dark:bg-dark-800 flex items-center justify-center">
                   {previewUrl ? (
                     <img src={previewUrl} alt="Profile" className="w-full h-full object-cover" />
@@ -88,6 +116,19 @@ export default function Profile() {
                   <FiUploadCloud className="text-white w-6 h-6" />
                 </div>
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+              </div>
+              
+              <div className="h-10 mb-4 flex items-center justify-center">
+                {selectedFile && (
+                  <Button 
+                    size="sm" 
+                    onClick={handleUploadImage} 
+                    isLoading={isLoading} 
+                    leftIcon={<FiUploadCloud />}
+                  >
+                    Save Image
+                  </Button>
+                )}
               </div>
 
               <h2 className="text-2xl font-bold text-slate-800 dark:text-white font-display mb-1">{user?.name}</h2>

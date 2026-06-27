@@ -18,7 +18,7 @@ import NotFound from './pages/NotFound';
 import Teachers from './pages/Teachers';
 import Attendance from './pages/Attendance';
 import Salary from './pages/Salary';
-import Notices from './pages/Notices';
+
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
@@ -51,7 +51,7 @@ function App() {
                 <Route path="/teachers" element={<Teachers />} />
                 <Route path="/attendance" element={<Attendance />} />
                 <Route path="/salary" element={<Salary />} />
-                <Route path="/notices" element={<Notices />} />
+
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/profile" element={<Profile />} />

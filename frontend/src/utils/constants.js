@@ -9,7 +9,7 @@ export const NAV_ITEMS = {
     { title: 'Teachers', path: '/teachers', icon: 'HiOutlineUsers' },
     { title: 'Attendance', path: '/attendance', icon: 'HiOutlineClipboardCheck' },
     { title: 'Salary', path: '/salary', icon: 'HiOutlineCurrencyDollar' },
-    { title: 'Notices', path: '/notices', icon: 'HiOutlineSpeakerphone' },
+
     { title: 'Reports', path: '/reports', icon: 'HiOutlineChartBar' },
     { title: 'Settings', path: '/settings', icon: 'HiOutlineCog' }
   ],
@@ -17,6 +17,6 @@ export const NAV_ITEMS = {
     { title: 'Dashboard', path: '/dashboard', icon: 'HiOutlineHome' },
     { title: 'Attendance', path: '/attendance', icon: 'HiOutlineClipboardCheck' },
     { title: 'My Salary', path: '/salary', icon: 'HiOutlineCurrencyDollar' },
-    { title: 'Notices', path: '/notices', icon: 'HiOutlineSpeakerphone' }
+
   ]
 };

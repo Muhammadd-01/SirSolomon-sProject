@@ -121,16 +121,21 @@ export default function Salary() {
     try {
       setIsLoadingPreview(true);
       const tId = ungeneratedSelected[0];
-      const res = await api.post('/salary/preview', {
-        teacherId: tId,
-        month: formData.month,
-        year: formData.year,
-        advance: formData.advance,
-        bonus: formData.bonus,
-        juneSalary: formData.juneSalary,
-        julySalary: formData.julySalary,
-        selectedComponents: getSelectedComponentsForTeacher(tId),
-      });
+      
+      const [res] = await Promise.all([
+        api.post('/salary/preview', {
+          teacherId: tId,
+          month: formData.month,
+          year: formData.year,
+          advance: formData.advance,
+          bonus: formData.bonus,
+          juneSalary: formData.juneSalary,
+          julySalary: formData.julySalary,
+          selectedComponents: getSelectedComponentsForTeacher(tId),
+        }),
+        new Promise(resolve => setTimeout(resolve, 600)) // Artificial delay for UX
+      ]);
+
       setPreviewData(res.data.data);
     } catch (error) {
       console.error(error);
@@ -539,7 +544,14 @@ export default function Salary() {
                     <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">For: {previewData.teacherName}</span>
                   </div>
                   {isLoadingPreview ? (
-                    <div className="py-8 text-center text-blue-500"><FiZap className="w-6 h-6 animate-pulse mx-auto" /></div>
+                    <div className="py-12 text-center text-blue-500 flex flex-col items-center justify-center">
+                      <div className="relative w-12 h-12 flex items-center justify-center mb-3">
+                        <div className="absolute inset-0 border-2 border-blue-200 dark:border-blue-900 rounded-full"></div>
+                        <div className="absolute inset-0 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <FiZap className="w-5 h-5 text-blue-500 animate-pulse" />
+                      </div>
+                      <span className="text-xs font-semibold text-blue-400 animate-pulse uppercase tracking-widest">Calculating...</span>
+                    </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
                       <div className="space-y-2">
