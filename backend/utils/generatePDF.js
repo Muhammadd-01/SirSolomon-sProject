@@ -10,93 +10,146 @@ const __dirname = path.dirname(__filename);
 const buildHeader = (doc, title, subtitle) => {
   doc
     .fillColor('#1e3a8a') // Navy primary
-    .fontSize(24)
+    .fontSize(18)
     .text("Sir Solomon's School", { align: 'center' })
     .fillColor('#4b5563')
-    .fontSize(12)
+    .fontSize(10)
     .text('123 Education Lane, Learning City, PK', { align: 'center' })
     .text('Phone: +92 300 1234567 | Email: info@sirsolomons.edu', { align: 'center' })
     .moveDown()
     .fillColor('#1f2937')
-    .fontSize(18)
+    .fontSize(14)
     .text(title, { align: 'center', underline: true })
     .moveDown(0.5);
     
   if (subtitle) {
-    doc.fontSize(12).text(subtitle, { align: 'center' }).moveDown();
+    doc.fontSize(10).text(subtitle, { align: 'center' }).moveDown();
   }
 };
 
 export const generateSalarySlipPDF = (salaryData, res) => {
-  const doc = new PDFDocument({ margin: 50 });
+  // Use A5 format
+  const doc = new PDFDocument({ margin: 30, size: 'A5' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=salary-slip-${salaryData.month}-${salaryData.year}.pdf`);
   doc.pipe(res);
 
-  buildHeader(doc, 'Salary Slip', `${getMonthName(salaryData.month)} ${salaryData.year}`);
-
-  // Teacher Profile Image
-  const profileImage = salaryData.teacher?.user?.profileImage || salaryData.teacher?.profileImage;
-  if (profileImage) {
-    const imagePath = path.join(__dirname, '..', profileImage); // Assuming /uploads/...
-    if (fs.existsSync(imagePath)) {
-      doc.image(imagePath, 450, 40, { fit: [60, 60], align: 'center', valign: 'center' });
-    }
-  }
+  buildHeader(doc, 'Salary Bill Receipt', `${getMonthName(salaryData.month)} ${salaryData.year}`);
 
   // Employee Details
-  doc
-    .fontSize(12)
-    .text(`Teacher Name: ${salaryData.teacher.fullName}`)
-    .text(`Department: ${salaryData.teacher.department || 'N/A'}`)
-    .text(`Status: ${salaryData.status.toUpperCase()}`)
-    .text(`Paid Date: ${salaryData.paidDate ? new Date(salaryData.paidDate).toLocaleDateString() : 'N/A'}`)
-    .moveDown();
+  doc.fontSize(10).fillColor('#000000');
+  const detailsY = doc.y;
+  doc.text(`Name: ${salaryData.teacher.fullName}`, 30, detailsY);
+  doc.text(`Department: ${salaryData.teacher.department || 'N/A'}`, 30, detailsY + 15);
+  doc.text(`Basic Salary: PKR ${salaryData.basicSalary}`, 200, detailsY);
+  doc.text(`Working Days: ${salaryData.totalWorkingDays}`, 200, detailsY + 15);
+  doc.moveDown(2);
 
-  // Earnings Table
-  const tableTop = doc.y;
-  let currentY = tableTop;
+  let currentY = doc.y;
 
   const drawRow = (y, label, value, isBold = false) => {
     if (isBold) doc.font('Helvetica-Bold');
     else doc.font('Helvetica');
-    
-    doc
-      .text(label, 50, y)
-      .text(value.toString(), 400, y, { width: 100, align: 'right' });
+    doc.text(label, 30, y);
+    doc.text(value.toString(), 250, y, { width: 100, align: 'right' });
   };
 
-  doc.font('Helvetica-Bold').text('Earnings', 50, currentY).text('Amount', 400, currentY, { width: 100, align: 'right' });
+  const drawSectionHeader = (y, text) => {
+    doc.rect(30, y - 2, 350, 16).fill('#f3f4f6');
+    doc.fillColor('#1f2937').font('Helvetica-Bold').fontSize(10).text(text, 35, y);
+    doc.font('Helvetica').fillColor('#000000');
+  };
+
+  // 1. DEDUCTIONS
+  drawSectionHeader(currentY, 'Deductions');
   currentY += 20;
-  drawRow(currentY, 'Basic Salary', salaryData.basicSalary);
-  currentY += 20;
-  drawRow(currentY, 'Allowances', salaryData.allowances);
-  currentY += 20;
-  drawRow(currentY, 'Bonuses', salaryData.bonuses);
-  currentY += 20;
-  drawRow(currentY, 'Overtime', salaryData.overtime?.total || 0);
+  
+  doc.fontSize(9);
+  drawRow(currentY, `Per Day Salary (Basic / ${salaryData.totalWorkingDays})`, `PKR ${salaryData.perDaySalary}`);
+  currentY += 15;
+  drawRow(currentY, `Absence Deduction (${salaryData.absentDays} days)`, `PKR ${salaryData.absenceDeduction}`);
+  currentY += 15;
+  drawRow(currentY, `Late Deduction (${salaryData.lateDays} lates = ${salaryData.absenceDueToLate} absents)`, `PKR ${salaryData.lateAbsenceDeduction}`);
+  currentY += 15;
+  drawRow(currentY, `Advance Deduction`, `PKR ${salaryData.advance}`);
+  currentY += 15;
+  
+  doc.fontSize(10);
+  drawRow(currentY, 'Total Deductions', `PKR ${salaryData.totalDeductions}`, true);
   currentY += 25;
-  drawRow(currentY, 'Gross Salary', salaryData.grossSalary, true);
 
-  currentY += 40;
-
-  // Deductions Table
-  doc.font('Helvetica-Bold').text('Deductions', 50, currentY).text('Amount', 400, currentY, { width: 100, align: 'right' });
-  currentY += 20;
-  drawRow(currentY, 'Tax Deduction', salaryData.taxDeduction);
-  currentY += 20;
-  drawRow(currentY, 'Leave Deductions', salaryData.leaveDeductions);
-  currentY += 20;
-  drawRow(currentY, 'Late Deductions', salaryData.lateDeductions);
-  currentY += 25;
-  drawRow(currentY, 'Total Deductions', (salaryData.taxDeduction + salaryData.leaveDeductions + salaryData.lateDeductions), true);
-
-  currentY += 40;
-
-  // Net Salary
-  doc.rect(50, currentY - 10, 500, 40).fill('#e0f2fe'); // Light navy/sky background
+  // 2. GROSS PAY
+  doc.rect(30, currentY - 5, 350, 20).fill('#e0f2fe');
   doc.fillColor('#1e3a8a');
-  drawRow(currentY + 5, 'NET SALARY', salaryData.netSalary, true);
+  drawRow(currentY, 'GROSS PAY (Basic - Deductions)', `PKR ${salaryData.grossPay}`, true);
+  doc.fillColor('#000000');
+  currentY += 30;
+
+  // 3. ALLOWANCES
+  drawSectionHeader(currentY, 'Allowances');
+  currentY += 20;
+  
+  doc.fontSize(9);
+  drawRow(currentY, `Attendance (0 absents)`, `PKR ${salaryData.attendanceAllowance}`);
+  currentY += 15;
+  drawRow(currentY, `Punctuality (<4 lates)`, `PKR ${salaryData.punctualityAllowance}`);
+  currentY += 15;
+  
+  doc.fontSize(10);
+  drawRow(currentY, 'Total Allowance', `PKR ${salaryData.totalAllowance}`, true);
+  currentY += 25;
+
+  // 4. NET PAY
+  doc.rect(30, currentY - 5, 350, 20).fill('#e0f2fe');
+  doc.fillColor('#1e3a8a');
+  drawRow(currentY, 'NET PAY (Gross + Allowances)', `PKR ${salaryData.netPay}`, true);
+  doc.fillColor('#000000');
+  currentY += 30;
+
+  // 5. ADDITIONS
+  if (salaryData.totalAdditions > 0) {
+    drawSectionHeader(currentY, 'Additions');
+    currentY += 20;
+    
+    doc.fontSize(9);
+    if (salaryData.juneSalary > 0) {
+      drawRow(currentY, 'June Salary', `PKR ${salaryData.juneSalary}`);
+      currentY += 15;
+    }
+    if (salaryData.julySalary > 0) {
+      drawRow(currentY, 'July Salary', `PKR ${salaryData.julySalary}`);
+      currentY += 15;
+    }
+    if (salaryData.bonus > 0) {
+      drawRow(currentY, 'Bonus', `PKR ${salaryData.bonus}`);
+      currentY += 15;
+    }
+    
+    doc.fontSize(10);
+    drawRow(currentY, 'Total Additions', `PKR ${salaryData.totalAdditions}`, true);
+    currentY += 25;
+  }
+
+  // 6. PAYABLE SALARY
+  doc.rect(30, currentY - 5, 350, 25).fill('#1e3a8a');
+  doc.fillColor('#ffffff');
+  drawRow(currentY, 'FINAL PAYABLE SALARY', `PKR ${salaryData.payableSalary}`, true);
+  doc.fillColor('#000000');
+  currentY += 40;
+
+  // Footer / Signatures
+  if (currentY > doc.page.height - 80) {
+    doc.addPage();
+    currentY = 50;
+  }
+  
+  currentY += 30;
+  doc.fontSize(9);
+  doc.text('_______________________', 40, currentY);
+  doc.text('Admin Signature', 50, currentY + 15);
+  
+  doc.text('_______________________', 220, currentY);
+  doc.text('Teacher Signature', 230, currentY + 15);
 
   doc.end();
 };

@@ -1,5 +1,6 @@
 import React from 'react';
 import { FiChevronUp, FiChevronDown, FiLoader } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Table({ 
   columns, 
@@ -49,18 +50,25 @@ export default function Table({
               </td>
             </tr>
           ) : (
-            data.map((row, rowIndex) => (
-              <tr 
-                key={row.id || rowIndex} 
-                className="bg-white border-b last:border-b-0 dark:bg-dark-900 border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-dark-800/50 transition-colors"
-              >
-                {columns.map((col, colIndex) => (
-                  <td key={colIndex} className={`px-6 py-4 whitespace-nowrap ${col.className || ''}`}>
-                    {col.render ? col.render(row) : row[col.key]}
-                  </td>
-                ))}
-              </tr>
-            ))
+            <AnimatePresence mode="popLayout">
+              {data.map((row, rowIndex) => (
+                <motion.tr 
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                  transition={{ duration: 0.2 }}
+                  key={row._id || row.id || rowIndex} 
+                  className="bg-white border-b last:border-b-0 dark:bg-dark-900 border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-dark-800/50 transition-colors"
+                >
+                  {columns.map((col, colIndex) => (
+                    <td key={colIndex} className={`px-6 py-4 whitespace-nowrap ${col.className || ''}`}>
+                      {col.render ? col.render(row) : row[col.key]}
+                    </td>
+                  ))}
+                </motion.tr>
+              ))}
+            </AnimatePresence>
           )}
         </tbody>
       </table>

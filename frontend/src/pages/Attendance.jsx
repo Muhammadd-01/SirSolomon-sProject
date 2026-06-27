@@ -4,7 +4,7 @@ import Card, { CardBody } from '../components/ui/Card';
 import Table from '../components/ui/Table';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
-import { FiCheckCircle, FiXCircle, FiClock, FiMinusCircle, FiCalendar, FiLayers, FiCalendar as FiCalIcon, FiSave, FiAlertCircle } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiClock, FiMinusCircle, FiCalendar, FiLayers, FiCalendar as FiCalIcon, FiSave, FiAlertCircle, FiX } from 'react-icons/fi';
 import { showSuccess, showError } from '../utils/alerts';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -41,6 +41,13 @@ export default function Attendance() {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [gridData, setGridData] = useState({}); // { "userId_dateStr": "status" }
 
+  // History Modal State
+  const [selectedHistoryUser, setSelectedHistoryUser] = useState(null);
+  const [historyData, setHistoryData] = useState([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyMonth, setHistoryMonth] = useState(new Date().getMonth() + 1);
+  const [historyYear, setHistoryYear] = useState(new Date().getFullYear());
+
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
@@ -63,8 +70,22 @@ export default function Attendance() {
     }
   };
 
+  const fetchHistory = async () => {
+    if (!selectedHistoryUser) return;
+    try {
+      setIsHistoryLoading(true);
+      const res = await api.get(`/attendance/user/${selectedHistoryUser._id}?month=${historyMonth}&year=${historyYear}`);
+      setHistoryData(res.data.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
   useEffect(() => { fetchUsers(); }, [role]);
   useEffect(() => { fetchAttendance(); }, [date, role, mode]);
+  useEffect(() => { fetchHistory(); }, [selectedHistoryUser, historyMonth, historyYear]);
 
   useEffect(() => {
     if (mode === 'bulk') {
@@ -77,7 +98,6 @@ export default function Attendance() {
       const res = await api.post('/attendance/mark', {
         userId, role, date, status, checkInTime
       });
-      // The backend auto-adjusts to late if after 7:55 AM. Notify user if changed.
       const finalStatus = res.data?.data?.status;
       if (status === 'present' && finalStatus === 'late') {
         showSuccess(`Marked as LATE (Auto-detected past cutoff)`);
@@ -90,7 +110,6 @@ export default function Attendance() {
     }
   };
 
-  // Bulk Calendar Grid logic
   const dateRange = useMemo(() => {
     const dates = [];
     let current = new Date(bulkData.startDate);
@@ -135,7 +154,6 @@ export default function Attendance() {
       dateRange.forEach(d => {
         const status = gridData[`${userId}_${d}`];
         if (status && status !== 'default') {
-          // If status is present or late, pass the default checkInTime
           const timeToPass = (status === 'present' || status === 'late') ? bulkData.defaultSignInTime : '';
           payload.push({ userId, date: d, status, checkInTime: timeToPass });
         }
@@ -188,9 +206,12 @@ export default function Attendance() {
 
   const columns = [
     { header: 'Name', key: 'name', render: (row) => (
-      <div>
-        <p className="font-bold text-slate-900 dark:text-white font-display">{row.name}</p>
-        <p className="text-xs text-slate-500">{row.department}</p>
+      <div 
+        className="cursor-pointer group"
+        onClick={() => setSelectedHistoryUser(row)}
+      >
+        <p className="font-bold text-slate-900 dark:text-white font-display group-hover:text-primary-600 transition-colors">{row.name}</p>
+        <p className="text-xs text-slate-500 group-hover:text-primary-400 transition-colors">Click to view history</p>
       </div>
     )},
     { 
@@ -303,7 +324,6 @@ export default function Attendance() {
                   </div>
                 </div>
 
-                {/* Calendar Grid Container */}
                 <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-xl mb-6">
                   <table className="w-full text-sm text-left">
                     <thead className="text-xs text-slate-700 bg-slate-100 dark:bg-dark-800 dark:text-slate-300 border-b border-slate-200 dark:border-white/5">
@@ -370,6 +390,84 @@ export default function Attendance() {
 
               </CardBody>
             </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedHistoryUser && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+              className="bg-white dark:bg-dark-800 rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-white/10 overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-100 dark:border-white/10 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800 dark:text-white font-display">
+                    {selectedHistoryUser.name}'s Attendance
+                  </h2>
+                  <p className="text-sm text-slate-500">Day by Day History</p>
+                </div>
+                <button 
+                  onClick={() => setSelectedHistoryUser(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white bg-slate-100 dark:bg-dark-700 rounded-full transition-colors"
+                >
+                  <FiX />
+                </button>
+              </div>
+              
+              <div className="p-6 bg-slate-50 dark:bg-dark-900">
+                <div className="flex gap-4 mb-6">
+                  <select 
+                    className="input-field !py-2 text-sm w-32" 
+                    value={historyMonth} 
+                    onChange={e => setHistoryMonth(Number(e.target.value))}
+                  >
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => (
+                      <option key={m} value={i+1}>{m}</option>
+                    ))}
+                  </select>
+                  <select 
+                    className="input-field !py-2 text-sm w-24" 
+                    value={historyYear} 
+                    onChange={e => setHistoryYear(Number(e.target.value))}
+                  >
+                    {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+
+                {isHistoryLoading ? (
+                  <div className="py-12 text-center text-primary-500">Loading...</div>
+                ) : historyData.length === 0 ? (
+                  <div className="py-12 text-center text-slate-500">No attendance records found for this month.</div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-96 overflow-y-auto pr-2">
+                    {historyData.map(record => {
+                      const dateObj = new Date(record.date);
+                      const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                      const dayNum = dateObj.getDate();
+                      const colorClass = STATUS_COLORS[record.status] || STATUS_COLORS.default;
+                      
+                      return (
+                        <div key={record._id} className={`p-3 rounded-xl border ${colorClass.replace('bg-', 'border-').replace('text-', '')} bg-opacity-50 flex flex-col justify-between h-20 shadow-sm transition-all hover:-translate-y-0.5`}>
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">{dayName}</span>
+                            <span className="text-sm font-bold opacity-90">{dayNum}</span>
+                          </div>
+                          <div className="flex justify-between items-end">
+                            <span className="text-xs font-bold capitalize">{record.status.replace('_', ' ')}</span>
+                            {record.checkInTime && <span className="text-[9px] font-semibold opacity-70">{record.checkInTime}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

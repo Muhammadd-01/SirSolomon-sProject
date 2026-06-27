@@ -22,24 +22,14 @@ const salarySchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    allowances: {
+    totalWorkingDays: {
+      type: Number,
+      required: true,
+    },
+    perDaySalary: {
       type: Number,
       default: 0,
     },
-    bonuses: {
-      type: Number,
-      default: 0,
-    },
-    vacationPay: {
-      type: Number,
-      default: 0,
-    },
-    overtime: {
-      hours: { type: Number, default: 0 },
-      rate: { type: Number, default: 0 },
-      total: { type: Number, default: 0 },
-    },
-    grossSalary: Number,
     // Attendance Stats
     presentDays: {
       type: Number,
@@ -54,15 +44,15 @@ const salarySchema = new mongoose.Schema(
       default: 0,
     },
     // Deductions
-    taxDeduction: {
+    absenceDeduction: {
       type: Number,
       default: 0,
     },
-    leaveDeductions: {
+    absenceDueToLate: {
       type: Number,
       default: 0,
     },
-    lateDeductions: {
+    lateAbsenceDeduction: {
       type: Number,
       default: 0,
     },
@@ -70,7 +60,52 @@ const salarySchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    netSalary: Number,
+    totalDeductions: {
+      type: Number,
+      default: 0,
+    },
+    grossPay: {
+      type: Number,
+      default: 0,
+    },
+    // Allowances
+    attendanceAllowance: {
+      type: Number,
+      default: 0,
+    },
+    punctualityAllowance: {
+      type: Number,
+      default: 0,
+    },
+    totalAllowance: {
+      type: Number,
+      default: 0,
+    },
+    netPay: {
+      type: Number,
+      default: 0,
+    },
+    // Additions
+    juneSalary: {
+      type: Number,
+      default: 0,
+    },
+    julySalary: {
+      type: Number,
+      default: 0,
+    },
+    bonus: {
+      type: Number,
+      default: 0,
+    },
+    totalAdditions: {
+      type: Number,
+      default: 0,
+    },
+    payableSalary: {
+      type: Number,
+      default: 0,
+    },
     status: {
       type: String,
       enum: Object.values(SALARY_STATUS),
@@ -87,21 +122,6 @@ const salarySchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
-salarySchema.pre('save', function (next) {
-  // Calculate overtime total
-  if (this.overtime && this.overtime.hours && this.overtime.rate) {
-    this.overtime.total = this.overtime.hours * this.overtime.rate;
-  }
-
-  // Calculate gross salary
-  this.grossSalary = this.basicSalary + this.allowances + this.bonuses + this.vacationPay + (this.overtime ? this.overtime.total : 0);
-
-  // Calculate net salary
-  this.netSalary = this.grossSalary - this.taxDeduction - this.leaveDeductions - this.lateDeductions - this.advance;
-
-  next();
-});
 
 salarySchema.index({ teacher: 1, month: 1, year: 1 }, { unique: true });
 
