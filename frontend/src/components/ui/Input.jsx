@@ -31,6 +31,10 @@ const Input = forwardRef(({
             ${Icon ? 'pl-10' : ''}
             ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}
           `}
+          onFocus={(e) => {
+            e.target.select();
+            if (props.onFocus) props.onFocus(e);
+          }}
           {...props}
         />
       </div>

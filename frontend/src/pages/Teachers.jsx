@@ -59,6 +59,7 @@ export default function Teachers() {
   };
 
   useEffect(() => {
+    setIsLoading(true);
     const delayDebounceFn = setTimeout(() => {
       fetchTeachers();
     }, 500);
@@ -98,7 +99,7 @@ export default function Teachers() {
       status: teacher.status || 'Active',
       remarks: teacher.remarks || ''
     });
-    setPreviewUrl(teacher.profileImage ? `http://localhost:5000${teacher.profileImage}` : '');
+    setPreviewUrl(teacher.profileImage ? `http://localhost:5001${teacher.profileImage}` : '');
     setSelectedFile(null);
     setIsModalOpen(true);
   };
@@ -132,31 +133,46 @@ export default function Teachers() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Use FormData since we have a file upload
-      const data = new FormData();
-      Object.keys(formData).forEach(key => {
-        // Special case for subjects (comma separated array)
-        if (key === 'subjects' && formData[key]) {
-          data.append(key, formData[key]); // Backend handles array parsing if needed, or we just pass it
-        } else {
-          data.append(key, formData[key]);
+      if (!selectedFile) {
+        // Fallback to JSON to avoid any macOS Chrome file permission issues (ERR_FILE_NOT_FOUND)
+        const jsonPayload = { ...formData };
+        if (jsonPayload.subjects) {
+          // Backend expects either string or array, string is fine as it splits it
         }
-      });
-
-      if (selectedFile) {
-        data.append('profileImage', selectedFile);
-      }
-
-      if (editingTeacher) {
-        await api.put(`/teachers/${editingTeacher._id}`, data);
-        showSuccess('Teacher updated successfully!');
+        
+        if (editingTeacher) {
+          await api.put(`/teachers/${editingTeacher._id}`, jsonPayload);
+          showSuccess('Teacher updated successfully!');
+        } else {
+          await api.post('/teachers', jsonPayload);
+          showSuccess('Teacher added successfully!');
+        }
       } else {
-        await api.post('/teachers', data);
-        showSuccess('Teacher added successfully!');
+        // Use FormData only if a file is explicitly selected
+        const data = new FormData();
+        Object.keys(formData).forEach(key => {
+          if (key === 'subjects' && formData[key]) {
+            data.append(key, formData[key]); 
+          } else {
+            data.append(key, formData[key]);
+          }
+        });
+
+        data.append('profileImage', selectedFile);
+
+        if (editingTeacher) {
+          await api.put(`/teachers/${editingTeacher._id}`, data);
+          showSuccess('Teacher updated successfully!');
+        } else {
+          await api.post('/teachers', data);
+          showSuccess('Teacher added successfully!');
+        }
       }
+      
       setIsModalOpen(false);
       fetchTeachers();
     } catch (error) {
+      console.error("FULL ERROR RESPONSE:", error.response);
       toast.error(error.response?.data?.message || 'Failed to save teacher');
     }
   };
@@ -237,7 +253,7 @@ export default function Teachers() {
               <div className="p-6 flex flex-col items-center border-b border-slate-100 dark:border-white/5 relative">
                 <div className="w-24 h-24 rounded-full overflow-hidden mb-4 border-4 border-white dark:border-dark-700 shadow-lg relative bg-slate-100 dark:bg-dark-700 flex items-center justify-center">
                   {teacher.profileImage ? (
-                    <img src={`http://localhost:5000${teacher.profileImage}`} alt={teacher.fullName} className="w-full h-full object-cover" />
+                    <img src={`http://localhost:5001${teacher.profileImage}`} alt={teacher.fullName} className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-3xl font-bold text-slate-400">{teacher.fullName.charAt(0)}</span>
                   )}
@@ -310,13 +326,28 @@ export default function Teachers() {
             <Input label="S/o, D/o, W/o" value={formData.guardianName} onChange={e => setFormData({...formData, guardianName: e.target.value})} />
             
             <Input label="Cell #" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-            <Input label="Email" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+            <Input label="Email" type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
             
             {!editingTeacher && (
               <Input label="Login Password" required type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
             )}
             
-            <Input label="CNIC Number" value={formData.cnic} onChange={e => setFormData({...formData, cnic: e.target.value})} />
+            <Input 
+              label="CNIC Number" 
+              placeholder="XXXXX-XXXXXXX-X"
+              value={formData.cnic} 
+              onChange={e => {
+                let val = e.target.value.replace(/\D/g, '');
+                if (val.length > 13) val = val.slice(0, 13);
+                let formatted = val;
+                if (val.length > 5 && val.length <= 12) {
+                  formatted = `${val.slice(0, 5)}-${val.slice(5)}`;
+                } else if (val.length > 12) {
+                  formatted = `${val.slice(0, 5)}-${val.slice(5, 12)}-${val.slice(12)}`;
+                }
+                setFormData({...formData, cnic: formatted});
+              }} 
+            />
             <Input label="Date of Birth" type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} />
             
             <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5">

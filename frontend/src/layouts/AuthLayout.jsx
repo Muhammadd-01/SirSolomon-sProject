@@ -22,15 +22,15 @@ export default function AuthLayout() {
         <Outlet />
         
         {/* NexoVate Branding */}
-        <div className="mt-8 flex items-center justify-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 dark:from-white dark:to-slate-200 flex items-center justify-center text-white dark:text-dark-900 font-bold text-xs shadow-md">
-            ND
+        <a href="https://nexovate-digital.vercel.app/" target="_blank" rel="noopener noreferrer" className="mt-8 flex items-center justify-center gap-2 opacity-60 hover:opacity-100 transition-opacity block">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 dark:from-white dark:to-slate-200 flex items-center justify-center text-white dark:text-dark-900 font-bold text-xs shadow-md overflow-hidden">
+            <img src="/nexovate-logo.png" alt="ND" className="w-full h-full object-cover" />
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider leading-tight">Powered by</span>
             <span className="text-sm font-bold text-slate-700 dark:text-slate-300 leading-tight font-display">NexoVate Digital</span>
           </div>
-        </div>
+        </a>
       </div>
     </div>
   );

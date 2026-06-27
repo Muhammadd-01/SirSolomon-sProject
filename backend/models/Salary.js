@@ -81,6 +81,29 @@ const salarySchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Custom salary components from Settings
+    customAdditions: {
+      type: Number,
+      default: 0,
+    },
+    customDeductions: {
+      type: Number,
+      default: 0,
+    },
+    appliedComponents: {
+      type: [{
+        name: String,
+        type: { type: String, enum: ['addition', 'deduction'] },
+        originalAmount: Number,
+        isPercentage: Boolean,
+        calculatedAmount: Number,
+      }],
+      default: [],
+    },
+    taxAmount: {
+      type: Number,
+      default: 0,
+    },
     netPay: {
       type: Number,
       default: 0,

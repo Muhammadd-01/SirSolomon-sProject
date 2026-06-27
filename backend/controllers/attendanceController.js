@@ -13,15 +13,8 @@ export const markAttendance = async (req, res, next) => {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // Auto-late detection based on checkInTime
+    // Remove auto-late detection based on checkInTime for manual operations
     let finalStatus = status;
-    if (checkInTime && status === 'present') {
-      const settings = await Settings.findOne();
-      const cutoff = settings?.signInCutoff || '07:55';
-      if (checkInTime > cutoff) {
-        finalStatus = 'late';
-      }
-    }
 
     let attendance = await Attendance.findOne({
       user: userId,
@@ -117,10 +110,6 @@ export const bulkMarkRange = async (req, res, next) => {
           const Teacher = (await import('../models/Teacher.js')).default;
           const teachers = await Teacher.find({ status: 'Active' });
           activeUsers = teachers.map(t => t.user);
-        } else {
-          const Student = (await import('../models/Student.js')).default;
-          const students = await Student.find({ status: 'active' });
-          activeUsers = students.map(s => s.user);
         }
       }
 
@@ -166,14 +155,15 @@ export const bulkMarkRange = async (req, res, next) => {
 
 export const getAttendanceByDate = async (req, res, next) => {
   try {
-    const { date, role } = req.query;
+    const { date, startDate, endDate, role } = req.query;
     
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    let queryStartDate = date ? new Date(date) : new Date(startDate);
+    queryStartDate.setHours(0, 0, 0, 0);
+    
+    let queryEndDate = date ? new Date(date) : new Date(endDate);
+    queryEndDate.setHours(23, 59, 59, 999);
 
-    let query = { date: { $gte: startOfDay, $lte: endOfDay } };
+    let query = { date: { $gte: queryStartDate, $lte: queryEndDate } };
     if (role) query.role = role;
 
     const attendances = await Attendance.find(query).populate('user', 'name profileImage');

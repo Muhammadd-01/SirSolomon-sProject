@@ -57,6 +57,13 @@ export const createTeacher = async (req, res, next) => {
       profileImage, // save to user profile as well
     });
 
+    if (teacherData.subjects && typeof teacherData.subjects === 'string') {
+      teacherData.subjects = teacherData.subjects.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (teacherData.dob === '') delete teacherData.dob;
+    if (teacherData.dateOfLeaving === '') delete teacherData.dateOfLeaving;
+    if (teacherData.joiningDate === '') delete teacherData.joiningDate;
+
     const teacher = await Teacher.create({
       user: user._id,
       fullName,
@@ -80,6 +87,13 @@ export const updateTeacher = async (req, res, next) => {
     if (req.file) {
       updateData.profileImage = `/uploads/${req.file.filename}`;
     }
+
+    if (updateData.subjects && typeof updateData.subjects === 'string') {
+      updateData.subjects = updateData.subjects.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    if (updateData.dob === '') delete updateData.dob;
+    if (updateData.dateOfLeaving === '') delete updateData.dateOfLeaving;
+    if (updateData.joiningDate === '') delete updateData.joiningDate;
 
     const teacher = await Teacher.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!teacher) return res.status(404).json({ success: false, message: 'Teacher not found' });

@@ -82,7 +82,7 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, toggleCollapse
           title={isCollapsed ? "Profile" : ""}
         >
           <img 
-            src={user?.profileImage ? `http://localhost:5000${user.profileImage}` : `https://ui-avatars.com/api/?name=${user?.name}&background=10b981&color=fff`} 
+            src={user?.profileImage ? `http://localhost:5001${user.profileImage}` : `https://ui-avatars.com/api/?name=${user?.name}&background=10b981&color=fff`} 
             alt="Avatar" 
             className="w-10 h-10 rounded-full object-cover flex-shrink-0"
           />
@@ -101,21 +101,21 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, toggleCollapse
         {/* NexoVate Branding */}
         <div className={`mt-2 pb-2 ${isCollapsed ? 'text-center' : 'px-2'}`}>
           {isCollapsed ? (
-            <div className="flex flex-col items-center opacity-50 hover:opacity-100 transition-opacity" title="Powered by NexoVate Digital">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 dark:from-white dark:to-slate-200 flex items-center justify-center text-white dark:text-dark-900 font-bold text-xs shadow-sm">
-                ND
+            <a href="https://nexovate-digital.vercel.app/" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center opacity-50 hover:opacity-100 transition-opacity block" title="Powered by NexoVate Digital">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 dark:from-white dark:to-slate-200 flex items-center justify-center text-white dark:text-dark-900 font-bold text-xs shadow-sm overflow-hidden">
+                <img src="/nexovate-logo.png" alt="ND" className="w-full h-full object-cover" />
               </div>
-            </div>
+            </a>
           ) : (
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-dark-800/30 border border-slate-200 dark:border-white/5 opacity-70 hover:opacity-100 transition-opacity group">
-              <div className="w-6 h-6 flex-shrink-0 rounded-md bg-gradient-to-br from-slate-800 to-slate-900 dark:from-white dark:to-slate-200 flex items-center justify-center text-white dark:text-dark-900 font-bold text-[10px] shadow-sm group-hover:shadow-md transition-shadow">
-                ND
+            <a href="https://nexovate-digital.vercel.app/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-dark-800/30 border border-slate-200 dark:border-white/5 opacity-70 hover:opacity-100 transition-opacity group block">
+              <div className="w-6 h-6 flex-shrink-0 rounded-md bg-gradient-to-br from-slate-800 to-slate-900 dark:from-white dark:to-slate-200 flex items-center justify-center text-white dark:text-dark-900 font-bold text-[10px] shadow-sm group-hover:shadow-md transition-shadow overflow-hidden">
+                <img src="/nexovate-logo.png" alt="ND" className="w-full h-full object-cover" />
               </div>
               <div className="flex flex-col">
                 <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-tight">Powered by</span>
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight font-display">NexoVate Digital</span>
               </div>
-            </div>
+            </a>
           )}
         </div>
       </div>

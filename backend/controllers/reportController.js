@@ -1,6 +1,6 @@
 import Attendance from '../models/Attendance.js';
 import Salary from '../models/Salary.js';
-import Fee from '../models/Fee.js';
+
 
 // Very basic implementations for reports, returning raw arrays.
 // Excel generation would usually format this using exceljs.
@@ -39,27 +39,24 @@ export const getFinancialReport = async (req, res, next) => {
   try {
     const { year, month } = req.query;
     
-    let feeQuery = { status: 'paid' };
     let salaryQuery = {};
-    
-    if (year) { feeQuery.year = year; salaryQuery.year = year; }
-    if (month) { feeQuery.month = month; salaryQuery.month = month; }
+    if (year) salaryQuery.year = year;
+    if (month) salaryQuery.month = month;
 
-    const fees = await Fee.find(feeQuery);
     const salaries = await Salary.find(salaryQuery);
-
-    const totalRevenue = fees.reduce((acc, curr) => acc + curr.netAmount, 0);
     const totalExpenses = salaries.reduce((acc, curr) => acc + curr.netSalary, 0);
 
     res.status(200).json({
       success: true,
       data: {
-        totalRevenue,
+        totalRevenue: 0,
         totalExpenses,
-        netProfit: totalRevenue - totalExpenses
+        netProfit: -totalExpenses
       }
     });
   } catch (error) {
     next(error);
   }
 };
+
+

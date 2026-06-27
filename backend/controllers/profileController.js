@@ -1,6 +1,5 @@
 import User from '../models/User.js';
 import Teacher from '../models/Teacher.js';
-import Student from '../models/Student.js';
 
 export const getProfile = async (req, res, next) => {
   try {
@@ -9,8 +8,6 @@ export const getProfile = async (req, res, next) => {
 
     if (user.role === 'teacher') {
       profileData = await Teacher.findOne({ user: user._id });
-    } else if (user.role === 'student') {
-      profileData = await Student.findOne({ user: user._id }).populate('class', 'className');
     }
 
     res.status(200).json({ success: true, data: { user, profile: profileData } });
@@ -31,8 +28,6 @@ export const updateProfile = async (req, res, next) => {
     let profileData = null;
     if (user.role === 'teacher') {
       profileData = await Teacher.findOneAndUpdate({ user: user._id }, req.body, { new: true });
-    } else if (user.role === 'student') {
-      profileData = await Student.findOneAndUpdate({ user: user._id }, req.body, { new: true });
     }
 
     res.status(200).json({ success: true, data: { user, profile: profileData } });
@@ -72,8 +67,6 @@ export const uploadProfileImage = async (req, res, next) => {
 
         if (req.user.role === 'teacher') {
             await Teacher.findOneAndUpdate({ user: req.user._id }, { profileImage: imagePath });
-        } else if (req.user.role === 'student') {
-            await Student.findOneAndUpdate({ user: req.user._id }, { profileImage: imagePath });
         }
 
         res.status(200).json({ success: true, data: imagePath, message: 'Image uploaded successfully' });

@@ -12,4 +12,5 @@ router.get('/attendance', getAttendanceReport);
 router.get('/salary', authorize(ROLES.PRINCIPAL), getSalaryReport);
 router.get('/financial', authorize(ROLES.PRINCIPAL), getFinancialReport);
 
+
 export default router;

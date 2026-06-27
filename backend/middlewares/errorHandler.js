@@ -41,7 +41,8 @@ const errorHandler = (err, req, res, next) => {
 
   res.status(error.status || 500).json({
     success: false,
-    message: error.message || 'Server Error',
+    message: error.message || err.message || 'Server Error',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });
 };
 

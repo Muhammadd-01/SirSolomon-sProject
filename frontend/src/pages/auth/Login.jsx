@@ -58,6 +58,7 @@ export default function Login() {
       }
 
       await login(data);
+      await new Promise(resolve => setTimeout(resolve, 800));
       toast.success('Welcome back!');
       const origin = location.state?.from?.pathname || '/dashboard';
       navigate(origin, { replace: true });
@@ -69,11 +70,18 @@ export default function Login() {
   };
 
   return (
-    <div className="glass-card p-8 md:p-10 w-full shadow-2xl relative">
+    <div className="glass-card p-8 md:p-10 w-full shadow-2xl relative overflow-hidden">
+      {isLoading && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 dark:bg-dark-800/80 backdrop-blur-sm animate-fade-in">
+          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
+          <p className="mt-4 text-primary-600 dark:text-primary-400 font-medium font-display tracking-wide">Signing in...</p>
+        </div>
+      )}
+
       {/* Theme Toggle inside login card for convenience */}
       <button 
         onClick={toggleTheme}
-        className="absolute top-6 right-6 p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-dark-700 transition-colors"
+        className="absolute top-6 right-6 p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-dark-700 transition-colors z-10"
       >
         {theme === 'dark' ? <FiSun className="w-5 h-5" /> : <FiMoon className="w-5 h-5" />}
       </button>

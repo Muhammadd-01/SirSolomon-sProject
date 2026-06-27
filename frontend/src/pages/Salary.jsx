@@ -4,7 +4,7 @@ import Card, { CardBody } from '../components/ui/Card';
 import Table from '../components/ui/Table';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import { FiDollarSign, FiDownload, FiFileText, FiCheckSquare, FiSquare, FiUser, FiFilter, FiZap, FiTrash2 } from 'react-icons/fi';
+import { FiDollarSign, FiDownload, FiFileText, FiCheckSquare, FiSquare, FiUser, FiFilter, FiZap, FiTrash2, FiPlus, FiMinus } from 'react-icons/fi';
 import { FaWhatsapp } from 'react-icons/fa';
 import { showSuccess, showError } from '../utils/alerts';
 import { formatCurrency } from '../utils/formatters';
@@ -20,6 +20,13 @@ export default function Salary() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [teacherFilter, setTeacherFilter] = useState('Active');
   const [selectedTeachers, setSelectedTeachers] = useState([]);
+
+  // Salary components from settings
+  const [salaryComponents, setSalaryComponents] = useState([]);
+  // Per-teacher component overrides: { teacherId: [compName1, compName2, ...] }
+  const [teacherComponents, setTeacherComponents] = useState({});
+  // Which teacher's components are expanded
+  const [expandedTeacher, setExpandedTeacher] = useState(null);
 
   const [formData, setFormData] = useState({
     month: new Date().getMonth() + 1,
@@ -57,12 +64,54 @@ export default function Salary() {
     }
   };
 
+  const fetchSettings = async () => {
+    try {
+      const res = await api.get('/settings');
+      if (res.data?.data?.salaryComponents) {
+        setSalaryComponents(res.data.data.salaryComponents);
+      }
+    } catch (err) {
+      console.error('Failed to load settings components', err);
+    }
+  };
+
   useEffect(() => { fetchSalaries(); }, [formData.month, formData.year]);
   useEffect(() => { fetchTeachers(); }, [teacherFilter]);
+  useEffect(() => { fetchSettings(); }, []);
+
+  // When teachers or components load, default all components ON for every teacher
+  useEffect(() => {
+    if (teachers.length > 0 && salaryComponents.length > 0) {
+      const allNames = salaryComponents.map(c => c.name);
+      setTeacherComponents(prev => {
+        const updated = { ...prev };
+        teachers.forEach(t => {
+          if (!updated[t._id]) {
+            updated[t._id] = [...allNames]; // all selected by default
+          }
+        });
+        return updated;
+      });
+    }
+  }, [teachers, salaryComponents]);
 
   const isGenerated = (teacherId) => salaries.some(s => s.teacher?._id === teacherId);
   const ungeneratedSelected = selectedTeachers.filter(id => !isGenerated(id));
   const allUngenerated = teachers.filter(t => !isGenerated(t._id));
+
+  const getSelectedComponentsForTeacher = (teacherId) => {
+    return teacherComponents[teacherId] || salaryComponents.map(c => c.name);
+  };
+
+  const toggleComponentForTeacher = (teacherId, compName) => {
+    setTeacherComponents(prev => {
+      const current = prev[teacherId] || salaryComponents.map(c => c.name);
+      const updated = current.includes(compName)
+        ? current.filter(n => n !== compName)
+        : [...current, compName];
+      return { ...prev, [teacherId]: updated };
+    });
+  };
 
   const fetchPreview = async () => {
     if (ungeneratedSelected.length === 0) {
@@ -80,6 +129,7 @@ export default function Salary() {
         bonus: formData.bonus,
         juneSalary: formData.juneSalary,
         julySalary: formData.julySalary,
+        selectedComponents: getSelectedComponentsForTeacher(tId),
       });
       setPreviewData(res.data.data);
     } catch (error) {
@@ -89,7 +139,7 @@ export default function Salary() {
     }
   };
 
-  useEffect(() => { fetchPreview(); }, [selectedTeachers, formData]);
+  useEffect(() => { fetchPreview(); }, [selectedTeachers, formData, teacherComponents]);
 
   const toggleTeacher = (id) => {
     if (isGenerated(id)) return;
@@ -128,6 +178,7 @@ export default function Salary() {
             bonus: formData.bonus,
             juneSalary: formData.juneSalary,
             julySalary: formData.julySalary,
+            selectedComponents: getSelectedComponentsForTeacher(tId),
           });
           successCount++;
         } catch (err) {
@@ -183,6 +234,9 @@ export default function Salary() {
       'Lates': s.lateDays,
       'Gross Pay': s.grossPay,
       'Allowances': s.totalAllowance,
+      'Custom Additions': s.customAdditions || 0,
+      'Custom Deductions': s.customDeductions || 0,
+      'Tax': s.taxAmount || 0,
       'Additions': s.totalAdditions,
       'Payable Salary': s.payableSalary,
       'Status': s.status?.toUpperCase(),
@@ -208,14 +262,14 @@ export default function Salary() {
   };
 
   const downloadSlip = (id) => {
-    window.open(`http://localhost:5000/api/salary/${id}/slip`, '_blank');
+    window.open(`http://localhost:5001/api/salary/${id}/slip`, '_blank');
   };
 
   const columns = [
     { header: 'Teacher', key: 'teacher', render: (r) => (
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex items-center justify-center text-xs">
-          {r.teacher?.profileImage ? <img src={`http://localhost:5000${r.teacher.profileImage}`} className="w-full h-full object-cover" /> : <FiUser />}
+          {r.teacher?.profileImage ? <img src={`http://localhost:5001${r.teacher.profileImage}`} className="w-full h-full object-cover" /> : <FiUser />}
         </div>
         <span className="font-semibold text-slate-900 dark:text-white font-display">{r.teacher?.fullName}</span>
       </div>
@@ -263,7 +317,7 @@ export default function Salary() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-4">
           <Card glass className="border-primary-200 dark:border-primary-900/50 shadow-primary-500/5">
             <CardBody className="p-5">
               <div className="flex items-center gap-2 mb-4 text-primary-600 dark:text-primary-400 border-b border-primary-100 dark:border-primary-900/30 pb-3">
@@ -316,34 +370,87 @@ export default function Salary() {
                 {teachers.map(t => {
                   const generated = isGenerated(t._id);
                   const selected = selectedTeachers.includes(t._id);
+                  const isExpanded = expandedTeacher === t._id;
+                  const teacherComps = getSelectedComponentsForTeacher(t._id);
                   
                   return (
-                    <div 
-                      key={t._id} 
-                      onClick={() => toggleTeacher(t._id)}
-                      className={`flex items-center gap-3 p-2.5 transition-all duration-150 ${
-                        generated 
-                          ? 'bg-emerald-50/80 dark:bg-emerald-900/10 cursor-default' 
-                          : selected
-                            ? 'bg-primary-50 dark:bg-primary-500/10 cursor-pointer'
-                            : 'hover:bg-slate-50 dark:hover:bg-dark-700 cursor-pointer'
-                      }`}
-                    >
-                      <div className={`text-lg flex-shrink-0 ${
-                        generated ? 'text-emerald-500' : selected ? 'text-primary-500' : 'text-slate-300 dark:text-slate-600'
-                      }`}>
-                        {generated || selected ? <FiCheckSquare /> : <FiSquare />}
+                    <div key={t._id}>
+                      <div 
+                        className={`flex items-center gap-3 p-2.5 transition-all duration-150 ${
+                          generated 
+                            ? 'bg-emerald-50/80 dark:bg-emerald-900/10 cursor-default' 
+                            : selected
+                              ? 'bg-primary-50 dark:bg-primary-500/10 cursor-pointer'
+                              : 'hover:bg-slate-50 dark:hover:bg-dark-700 cursor-pointer'
+                        }`}
+                      >
+                        <div 
+                          onClick={() => toggleTeacher(t._id)}
+                          className={`text-lg flex-shrink-0 ${
+                            generated ? 'text-emerald-500' : selected ? 'text-primary-500' : 'text-slate-300 dark:text-slate-600'
+                          }`}
+                        >
+                          {generated || selected ? <FiCheckSquare /> : <FiSquare />}
+                        </div>
+                        <div 
+                          onClick={() => toggleTeacher(t._id)}
+                          className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex items-center justify-center text-[10px] flex-shrink-0"
+                        >
+                          {t.profileImage ? <img src={`http://localhost:5001${t.profileImage}`} className="w-full h-full object-cover" /> : <FiUser />}
+                        </div>
+                        <div className="flex-1 min-w-0" onClick={() => toggleTeacher(t._id)}>
+                          <p className="text-sm font-bold text-slate-800 dark:text-white truncate leading-tight">{t.fullName}</p>
+                          <p className="text-[10px] text-slate-400">{t.department || 'General'} · PKR {(t.basicSalary || 0).toLocaleString()}</p>
+                        </div>
+                        {generated && (
+                          <span className="text-[9px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-full flex-shrink-0">DONE</span>
+                        )}
+                        {!generated && salaryComponents.length > 0 && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setExpandedTeacher(isExpanded ? null : t._id); }}
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 transition-colors ${
+                              isExpanded 
+                                ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-400' 
+                                : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200'
+                            }`}
+                            title="Configure allowances for this teacher"
+                          >
+                            {teacherComps.length}/{salaryComponents.length}
+                          </button>
+                        )}
                       </div>
-                      <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex items-center justify-center text-[10px] flex-shrink-0">
-                        {t.profileImage ? <img src={`http://localhost:5000${t.profileImage}`} className="w-full h-full object-cover" /> : <FiUser />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-800 dark:text-white truncate leading-tight">{t.fullName}</p>
-                        <p className="text-[10px] text-slate-400">{t.department || 'General'} · PKR {(t.basicSalary || 0).toLocaleString()}</p>
-                      </div>
-                      {generated && (
-                        <span className="text-[9px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-full flex-shrink-0">DONE</span>
-                      )}
+                      {/* Per-teacher component toggles */}
+                      <AnimatePresence>
+                        {isExpanded && !generated && salaryComponents.length > 0 && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }} 
+                            animate={{ height: 'auto', opacity: 1 }} 
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="px-4 py-2 bg-slate-50 dark:bg-dark-800/80 border-t border-slate-100 dark:border-white/5 space-y-1">
+                              {salaryComponents.map((comp, ci) => {
+                                const isActive = teacherComps.includes(comp.name);
+                                return (
+                                  <label key={ci} className="flex items-center gap-2 cursor-pointer py-1 hover:bg-white/50 dark:hover:bg-dark-700/50 px-2 rounded-lg transition-colors">
+                                    <input 
+                                      type="checkbox" 
+                                      className="w-3.5 h-3.5 rounded accent-primary-600" 
+                                      checked={isActive}
+                                      onChange={() => toggleComponentForTeacher(t._id, comp.name)}
+                                    />
+                                    <div className={`w-1.5 h-1.5 rounded-full ${comp.type === 'addition' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 flex-1">{comp.name}</span>
+                                    <span className={`text-[10px] font-bold ${comp.type === 'addition' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                      {comp.type === 'addition' ? '+' : '-'}{comp.defaultAmount}{comp.isPercentage ? '%' : ' PKR'}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   );
                 })}
@@ -388,6 +495,36 @@ export default function Salary() {
               )}
             </CardBody>
           </Card>
+
+          {/* Salary Components Summary Card */}
+          {salaryComponents.length > 0 && (
+            <Card glass className="border-emerald-200 dark:border-emerald-900/30">
+              <CardBody className="p-4">
+                <h4 className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <FiDollarSign className="w-3.5 h-3.5 text-emerald-500" /> Active Salary Components
+                </h4>
+                <div className="space-y-1.5">
+                  {salaryComponents.map((comp, i) => (
+                    <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs ${
+                      comp.type === 'addition' 
+                        ? 'bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30' 
+                        : 'bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/30'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${comp.type === 'addition' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{comp.name}</span>
+                      </div>
+                      <span className={`font-bold ${comp.type === 'addition' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {comp.type === 'addition' ? <FiPlus className="inline w-3 h-3" /> : <FiMinus className="inline w-3 h-3" />}
+                        {' '}{comp.defaultAmount}{comp.isPercentage ? '%' : ' PKR'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2 text-center">All components are applied by default. Click the badge on each teacher to customize.</p>
+              </CardBody>
+            </Card>
+          )}
         </div>
 
         <div className="lg:col-span-2 space-y-6">
@@ -404,7 +541,7 @@ export default function Salary() {
                   {isLoadingPreview ? (
                     <div className="py-8 text-center text-blue-500"><FiZap className="w-6 h-6 animate-pulse mx-auto" /></div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-6 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
                       <div className="space-y-2">
                         <div className="flex justify-between"><span className="text-slate-500">Basic Salary</span><span className="font-semibold">{formatCurrency(previewData.basicSalary)}</span></div>
                         <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Absences ({previewData.attendanceStats.absent} days)</span><span className="font-semibold">{formatCurrency(previewData.absenceDeduction)}</span></div>
@@ -415,11 +552,23 @@ export default function Salary() {
                       <div className="space-y-2">
                         <div className="flex justify-between text-emerald-600"><span className="text-emerald-500/70 text-xs">+ Attendance Allowance</span><span className="font-semibold">{formatCurrency(previewData.attendanceAllowance)}</span></div>
                         <div className="flex justify-between text-emerald-600"><span className="text-emerald-500/70 text-xs">+ Punctuality Allowance</span><span className="font-semibold">{formatCurrency(previewData.punctualityAllowance)}</span></div>
+                        
+                        {/* Custom components from settings */}
+                        {previewData.appliedComponents && previewData.appliedComponents.map((comp, ci) => (
+                          <div key={ci} className={`flex justify-between ${comp.type === 'addition' ? 'text-emerald-600' : 'text-red-500'}`}>
+                            <span className={`${comp.type === 'addition' ? 'text-emerald-500/70' : 'text-red-400/70'} text-xs`}>
+                              {comp.type === 'addition' ? '+' : '-'} {comp.name} {comp.isPercentage ? `(${comp.originalAmount}%)` : ''}
+                            </span>
+                            <span className="font-semibold">{formatCurrency(comp.calculatedAmount)}</span>
+                          </div>
+                        ))}
+
+                        {previewData.taxAmount > 0 && <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Tax</span><span className="font-semibold">{formatCurrency(previewData.taxAmount)}</span></div>}
                         {previewData.juneSalary > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ June Salary</span><span className="font-semibold">{formatCurrency(previewData.juneSalary)}</span></div>}
                         {previewData.julySalary > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ July Salary</span><span className="font-semibold">{formatCurrency(previewData.julySalary)}</span></div>}
                         {previewData.bonus > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ Bonus</span><span className="font-semibold">{formatCurrency(previewData.bonus)}</span></div>}
                       </div>
-                      <div className="col-span-2 bg-blue-100/50 dark:bg-blue-900/20 p-3 rounded-lg flex justify-between items-center mt-2 border border-blue-200 dark:border-blue-800/50">
+                      <div className="col-span-1 sm:col-span-2 bg-blue-100/50 dark:bg-blue-900/20 p-3 rounded-lg flex justify-between items-center mt-2 border border-blue-200 dark:border-blue-800/50">
                         <span className="font-bold text-blue-900 dark:text-blue-100 text-lg uppercase tracking-wide">Payable Salary</span>
                         <span className="font-bold text-blue-600 dark:text-blue-400 text-xl">{formatCurrency(previewData.payableSalary)}</span>
                       </div>

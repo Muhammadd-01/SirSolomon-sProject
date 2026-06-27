@@ -1,13 +1,36 @@
 import Salary from '../models/Salary.js';
 import Teacher from '../models/Teacher.js';
+import Settings from '../models/Settings.js';
 import { generateSalarySlipPDF } from '../utils/generatePDF.js';
 import { calculateSalary } from '../utils/calculateSalary.js';
 import Attendance from '../models/Attendance.js';
 import { SALARY_STATUS } from '../config/constants.js';
 
+// Helper: fetch settings and build custom components list
+const getSettingsComponents = async (selectedComponentNames = null) => {
+  const settings = await Settings.findOne();
+  if (!settings || !settings.salaryComponents || settings.salaryComponents.length === 0) {
+    return { components: [], taxPercentage: 0 };
+  }
+
+  let components = settings.salaryComponents.map(c => ({
+    name: c.name,
+    type: c.type,
+    amount: c.defaultAmount,
+    isPercentage: c.isPercentage
+  }));
+
+  // If selectedComponentNames is provided, filter to only those selected
+  if (selectedComponentNames && Array.isArray(selectedComponentNames)) {
+    components = components.filter(c => selectedComponentNames.includes(c.name));
+  }
+
+  return { components, taxPercentage: settings.taxPercentage || 0 };
+};
+
 export const generateSalary = async (req, res, next) => {
   try {
-    const { teacherId, month, year, advance = 0, bonus = 0, juneSalary = 0, julySalary = 0 } = req.body;
+    const { teacherId, month, year, advance = 0, bonus = 0, juneSalary = 0, julySalary = 0, selectedComponents } = req.body;
 
     // Check if already generated
     const existing = await Salary.findOne({ teacher: teacherId, month, year });
@@ -35,8 +58,6 @@ export const generateSalary = async (req, res, next) => {
     let presentCount = 0;
 
     attendanceRecords.forEach(record => {
-      // In old logic, half day was treated as 0.5 absent. If needed, we can keep that.
-      // But the requirement just says absences. We'll count half_day as 0.5 absent if they exist.
       if (record.status === 'absent') absentCount += 1;
       if (record.status === 'half_day') absentCount += 0.5;
       if (record.status === 'late') lateCount++;
@@ -48,7 +69,6 @@ export const generateSalary = async (req, res, next) => {
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const hasServedOneYear = teacher.joiningDate <= oneYearAgo;
 
-    // Auto-populate June salary (in December) and July salary (in January)
     let finalJuneSalary = Number(juneSalary) || 0;
     let finalJulySalary = Number(julySalary) || 0;
     if (month === 12 && hasServedOneYear && !finalJuneSalary) {
@@ -58,6 +78,9 @@ export const generateSalary = async (req, res, next) => {
       finalJulySalary = teacher.basicSalary;
     }
 
+    // Fetch custom components from settings
+    const { components: customComponents, taxPercentage } = await getSettingsComponents(selectedComponents);
+
     const calculated = calculateSalary({
       basicSalary: teacher.basicSalary,
       totalWorkingDays,
@@ -66,7 +89,9 @@ export const generateSalary = async (req, res, next) => {
       advance: Number(advance) || 0,
       juneSalary: finalJuneSalary,
       julySalary: finalJulySalary,
-      bonus: Number(bonus) || 0
+      bonus: Number(bonus) || 0,
+      customComponents,
+      taxPercentage
     });
 
     const salary = await Salary.create({
@@ -87,8 +112,12 @@ export const generateSalary = async (req, res, next) => {
       grossPay: calculated.grossPay,
       attendanceAllowance: calculated.attendanceAllowance,
       punctualityAllowance: calculated.punctualityAllowance,
+      customAdditions: calculated.customAdditions,
+      customDeductions: calculated.customDeductions,
+      appliedComponents: calculated.appliedComponents,
       totalAllowance: calculated.totalAllowance,
       netPay: calculated.netPay,
+      taxAmount: calculated.taxAmount,
       juneSalary: finalJuneSalary,
       julySalary: finalJulySalary,
       bonus: Number(bonus) || 0,
@@ -105,7 +134,7 @@ export const generateSalary = async (req, res, next) => {
 
 export const previewSalary = async (req, res, next) => {
   try {
-    const { teacherId, month, year, advance = 0, bonus = 0, juneSalary = 0, julySalary = 0 } = req.body;
+    const { teacherId, month, year, advance = 0, bonus = 0, juneSalary = 0, julySalary = 0, selectedComponents } = req.body;
 
     const teacher = await Teacher.findById(teacherId).populate('user');
     if (!teacher) return res.status(404).json({ success: false, message: 'Teacher not found' });
@@ -141,6 +170,9 @@ export const previewSalary = async (req, res, next) => {
       finalJulySalary = teacher.basicSalary;
     }
 
+    // Fetch custom components from settings
+    const { components: customComponents, taxPercentage } = await getSettingsComponents(selectedComponents);
+
     const calculated = calculateSalary({
       basicSalary: teacher.basicSalary,
       totalWorkingDays,
@@ -149,7 +181,9 @@ export const previewSalary = async (req, res, next) => {
       advance: Number(advance) || 0,
       juneSalary: finalJuneSalary,
       julySalary: finalJulySalary,
-      bonus: Number(bonus) || 0
+      bonus: Number(bonus) || 0,
+      customComponents,
+      taxPercentage
     });
 
     const preview = {

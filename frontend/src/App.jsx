@@ -16,12 +16,8 @@ import Login from './pages/auth/Login';
 import Dashboard from './pages/Dashboard';
 import NotFound from './pages/NotFound';
 import Teachers from './pages/Teachers';
-import Students from './pages/Students';
-import Classes from './pages/Classes';
 import Attendance from './pages/Attendance';
 import Salary from './pages/Salary';
-import Fees from './pages/Fees';
-import Exams from './pages/Exams';
 import Notices from './pages/Notices';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
@@ -53,12 +49,8 @@ function App() {
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/teachers" element={<Teachers />} />
-                <Route path="/students" element={<Students />} />
-                <Route path="/classes" element={<Classes />} />
                 <Route path="/attendance" element={<Attendance />} />
                 <Route path="/salary" element={<Salary />} />
-                <Route path="/fees" element={<Fees />} />
-                <Route path="/exams" element={<Exams />} />
                 <Route path="/notices" element={<Notices />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/settings" element={<Settings />} />

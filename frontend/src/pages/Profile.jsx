@@ -12,7 +12,7 @@ export default function Profile() {
   const { user, login } = useAuth(); // Assuming login or updateUser can be used to refresh auth context if needed
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState(user?.profileImage ? `http://localhost:5000${user.profileImage}` : '');
+  const [previewUrl, setPreviewUrl] = useState(user?.profileImage ? `http://localhost:5001${user.profileImage}` : '');
   const [selectedFile, setSelectedFile] = useState(null);
 
   const [formData, setFormData] = useState({

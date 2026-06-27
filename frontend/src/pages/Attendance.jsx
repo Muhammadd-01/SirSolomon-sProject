@@ -23,13 +23,16 @@ export default function Attendance() {
   const [attendances, setAttendances] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
+  const [isDailySaving, setIsDailySaving] = useState(false);
   const [mode, setMode] = useState('daily'); // 'daily' or 'bulk'
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [pendingDailyChanges, setPendingDailyChanges] = useState({}); // { userId: status }
 
   // Daily State
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [checkInTime, setCheckInTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
-  const [role, setRole] = useState('teacher');
   const [users, setUsers] = useState([]);
+  const role = 'teacher'; // Hardcoded since we only manage teachers now
 
   // Bulk State
   const [bulkData, setBulkData] = useState({
@@ -51,7 +54,7 @@ export default function Attendance() {
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const res = await api.get(role === 'student' ? '/students?status=active' : '/teachers?status=Active');
+      const res = await api.get('/teachers?status=Active');
       setUsers(res.data.data);
     } catch (error) {
       showError(`Failed to load ${role}s`);
@@ -65,6 +68,7 @@ export default function Attendance() {
     try {
       const res = await api.get(`/attendance/date?date=${date}&role=${role}`);
       setAttendances(res.data.data);
+      setPendingDailyChanges({}); // Clear pending changes when date/role changes
     } catch (error) {
       console.error(error);
     }
@@ -83,30 +87,79 @@ export default function Attendance() {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, [role]);
-  useEffect(() => { fetchAttendance(); }, [date, role, mode]);
+  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { fetchAttendance(); }, [date, mode]);
   useEffect(() => { fetchHistory(); }, [selectedHistoryUser, historyMonth, historyYear]);
 
   useEffect(() => {
     if (mode === 'bulk') {
-      setSelectedUsers(users.map(u => u.user || u._id));
+      setSelectedUsers(users.map(u => {
+        const id = typeof u.user === 'object' ? u.user?._id : u.user;
+        return id || u._id;
+      }));
     }
   }, [mode, users]);
 
-  const markStatus = async (userId, status) => {
+  // Fetch existing attendance records for the bulk date range and pre-populate gridData
+  const fetchBulkExisting = async () => {
+    if (mode !== 'bulk' || !bulkData.startDate || !bulkData.endDate || users.length === 0) return;
     try {
-      const res = await api.post('/attendance/mark', {
-        userId, role, date, status, checkInTime
+      const res = await api.get(`/attendance/date?startDate=${bulkData.startDate}&endDate=${bulkData.endDate}&role=${role}`);
+      const records = res.data.data;
+      const newGrid = {};
+      records.forEach(rec => {
+        const userId = rec.user?._id || rec.user;
+        const d = new Date(rec.date);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const key = `${userId}_${dateStr}`;
+        if (STATUSES.includes(rec.status)) {
+          newGrid[key] = rec.status;
+        }
       });
-      const finalStatus = res.data?.data?.status;
-      if (status === 'present' && finalStatus === 'late') {
-        showSuccess(`Marked as LATE (Auto-detected past cutoff)`);
-      } else {
-        showSuccess(`Marked as ${finalStatus}`);
-      }
+      // Server data should overwrite local data when fetching bulk existing
+      setGridData(prev => ({ ...prev, ...newGrid }));
+    } catch (err) {
+      console.error('Failed to fetch bulk existing attendance', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchBulkExisting();
+  }, [mode, bulkData.startDate, bulkData.endDate, users]);
+
+  const markStatus = (userId, status) => {
+    setPendingDailyChanges(prev => ({
+      ...prev,
+      [userId]: status
+    }));
+  };
+
+  const saveDailyChanges = async () => {
+    const userIdsWithChanges = Object.keys(pendingDailyChanges);
+    if (userIdsWithChanges.length === 0) return;
+
+    const payload = userIdsWithChanges.map(userId => {
+      const status = pendingDailyChanges[userId];
+      const timeToPass = (status === 'present' || status === 'late') ? checkInTime : '';
+      return { userId, date, status, checkInTime: timeToPass };
+    });
+
+    try {
+      setIsDailySaving(true);
+      await api.post('/attendance/bulk-range', {
+        role,
+        startDate: date,
+        endDate: date,
+        excludeSundays: false,
+        userIds: userIdsWithChanges,
+        perUserStatuses: payload
+      });
+      showSuccess(`Successfully saved daily attendance`);
       fetchAttendance();
     } catch (error) {
-      showError('Failed to mark attendance');
+      showError('Failed to save attendance changes');
+    } finally {
+      setIsDailySaving(false);
     }
   };
 
@@ -194,13 +247,20 @@ export default function Attendance() {
   };
 
   const tableData = users.map(user => {
-    const record = attendances.find(a => a.user?._id === user.user || a.user?._id === user._id);
+    const actualUserId = typeof user.user === 'object' ? user.user?._id : user.user;
+    const finalId = actualUserId || user._id;
+    const record = attendances.find(a => a.user?._id === finalId || a.user === finalId);
+    
+    // If there is a pending change for this user, reflect that instead of the DB record
+    const currentStatus = pendingDailyChanges[finalId] || record?.status || 'Not Marked';
+    
     return {
-      _id: user.user || user._id,
+      _id: finalId,
       name: user.fullName || user.name,
       department: user.department || 'N/A',
-      status: record?.status || 'Not Marked',
-      time: record?.checkInTime || '-'
+      status: currentStatus,
+      isPending: !!pendingDailyChanges[finalId],
+      time: pendingDailyChanges[finalId] && ['present', 'late'].includes(currentStatus) ? checkInTime : (record?.checkInTime || '-')
     };
   });
 
@@ -221,7 +281,7 @@ export default function Attendance() {
         const badgeColor = STATUS_COLORS[row.status] || STATUS_COLORS.default;
         return (
           <div className="flex items-center gap-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${badgeColor}`}>{row.status.replace('_', ' ')}</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${badgeColor} ${row.isPending ? 'border border-primary-400 border-dashed animate-pulse' : ''}`}>{row.status.replace('_', ' ')} {row.isPending && '(Unsaved)'}</span>
             {row.time !== '-' && <span className="text-xs text-slate-400 font-medium">{row.time}</span>}
           </div>
         );
@@ -230,15 +290,41 @@ export default function Attendance() {
     { 
       header: 'Mark Attendance', 
       key: 'actions',
-      render: (row) => (
-        <div className="flex items-center gap-1 bg-slate-50 dark:bg-dark-800 p-1 rounded-xl border border-slate-200 dark:border-white/5 w-max">
-          <button onClick={() => markStatus(row._id, 'present')} className="px-3 py-1.5 rounded-lg text-emerald-600 hover:bg-emerald-100 transition-colors text-sm font-medium flex items-center gap-1" title="Present"><FiCheckCircle /> P</button>
-          <button onClick={() => markStatus(row._id, 'late')} className="px-3 py-1.5 rounded-lg text-amber-600 hover:bg-amber-100 transition-colors text-sm font-medium flex items-center gap-1" title="Late"><FiClock /> L</button>
-          <button onClick={() => markStatus(row._id, 'half_day')} className="px-3 py-1.5 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors text-sm font-medium flex items-center gap-1" title="Half Day"><FiMinusCircle /> HD</button>
-          <button onClick={() => markStatus(row._id, 'absent')} className="px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-100 transition-colors text-sm font-medium flex items-center gap-1" title="Absent"><FiXCircle /> A</button>
-          <button onClick={() => markStatus(row._id, 'leave')} className="px-3 py-1.5 rounded-lg text-purple-600 hover:bg-purple-100 transition-colors text-sm font-medium flex items-center gap-1" title="Leave"><FiCalendar /> Lv</button>
-        </div>
-      )
+      render: (row) => {
+        if (row.status !== 'Not Marked' && !row.isPending && editingUserId !== row._id) {
+          return (
+            <div className="flex items-center gap-3 py-1">
+              <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <FiCheckCircle className="w-4 h-4" /> Saved
+              </span>
+              <button 
+                onClick={() => setEditingUserId(row._id)} 
+                className="text-xs text-slate-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors underline"
+              >
+                Edit
+              </button>
+            </div>
+          );
+        }
+
+        const currentStatus = row.status !== 'Not Marked' ? row.status : null;
+        const activeRing = (s) => currentStatus === s ? 'ring-2 ring-offset-1' : '';
+        return (
+          <div className="flex items-center gap-1 bg-slate-50 dark:bg-dark-800 p-1 rounded-xl border border-slate-200 dark:border-white/5 w-max">
+            <button onClick={() => { markStatus(row._id, 'present'); setEditingUserId(null); }} className={`px-3 py-1.5 rounded-lg text-emerald-600 hover:bg-emerald-100 transition-colors text-sm font-medium flex items-center gap-1 ${activeRing('present')} ${currentStatus === 'present' ? 'bg-emerald-100 dark:bg-emerald-500/20 ring-emerald-500' : ''}`} title="Present"><FiCheckCircle /> P</button>
+            <button onClick={() => { markStatus(row._id, 'late'); setEditingUserId(null); }} className={`px-3 py-1.5 rounded-lg text-amber-600 hover:bg-amber-100 transition-colors text-sm font-medium flex items-center gap-1 ${activeRing('late')} ${currentStatus === 'late' ? 'bg-amber-100 dark:bg-amber-500/20 ring-amber-500' : ''}`} title="Late"><FiClock /> L</button>
+            <button onClick={() => { markStatus(row._id, 'half_day'); setEditingUserId(null); }} className={`px-3 py-1.5 rounded-lg text-blue-600 hover:bg-blue-100 transition-colors text-sm font-medium flex items-center gap-1 ${activeRing('half_day')} ${currentStatus === 'half_day' ? 'bg-blue-100 dark:bg-blue-500/20 ring-blue-500' : ''}`} title="Half Day"><FiMinusCircle /> HD</button>
+            <button onClick={() => { markStatus(row._id, 'absent'); setEditingUserId(null); }} className={`px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-100 transition-colors text-sm font-medium flex items-center gap-1 ${activeRing('absent')} ${currentStatus === 'absent' ? 'bg-red-100 dark:bg-red-500/20 ring-red-500' : ''}`} title="Absent"><FiXCircle /> A</button>
+            <button onClick={() => { markStatus(row._id, 'leave'); setEditingUserId(null); }} className={`px-3 py-1.5 rounded-lg text-purple-600 hover:bg-purple-100 transition-colors text-sm font-medium flex items-center gap-1 ${activeRing('leave')} ${currentStatus === 'leave' ? 'bg-purple-100 dark:bg-purple-500/20 ring-purple-500' : ''}`} title="Leave"><FiCalendar /> Lv</button>
+            {row.status !== 'Not Marked' && !row.isPending && (
+              <button onClick={() => setEditingUserId(null)} className="px-2 py-1.5 text-slate-400 hover:text-slate-600"><FiX /></button>
+            )}
+            {row.isPending && (
+              <button onClick={() => { setPendingDailyChanges(prev => { const n = {...prev}; delete n[row._id]; return n; }); setEditingUserId(null); }} className="px-2 py-1.5 text-slate-400 hover:text-red-500 text-xs font-bold transition-colors">Undo</button>
+            )}
+          </div>
+        );
+      }
     }
   ];
 
@@ -255,15 +341,7 @@ export default function Attendance() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4 mb-4">
-        <div className="flex-1 max-w-xs">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 ml-1 mb-1">Target Role</label>
-          <select className="input-field !bg-white dark:!bg-dark-800" value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="teacher">Teachers</option>
-            <option value="student">Students</option>
-          </select>
-        </div>
-      </div>
+
 
       <AnimatePresence mode="wait">
         {mode === 'daily' ? (
@@ -271,28 +349,36 @@ export default function Attendance() {
             <Card glass>
               <CardBody className="p-6">
                 <div className="flex flex-wrap gap-4 mb-6 p-4 bg-slate-50 dark:bg-dark-800/50 rounded-2xl border border-slate-100 dark:border-white/5 items-end justify-between">
-                  <div className="flex gap-4">
-                    <div>
+                  <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                    <div className="flex-1">
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 ml-1 mb-1">Select Date</label>
                       <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full sm:w-48 !bg-white dark:!bg-dark-700" />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 ml-1 mb-1">Sign-In Time</label>
                       <Input type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="w-full sm:w-40 !bg-white dark:!bg-dark-700" />
                     </div>
                   </div>
-                  <div className="text-sm text-slate-500 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800 flex items-center gap-2">
-                    <FiAlertCircle className="text-amber-500" />
-                    Auto-marks LATE if after configured cutoff (e.g. 07:55 AM)
-                  </div>
                 </div>
 
-                <div className="flex gap-4 text-xs font-medium text-slate-500 mb-4 px-2">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> P = Present</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> L = Late</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> HD = Half Day</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> A = Absent</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Lv = Leave</span>
+                <div className="flex justify-between items-center mb-4 px-2">
+                  <div className="flex gap-4 text-xs font-medium text-slate-500">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> P = Present</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> L = Late</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> HD = Half Day</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> A = Absent</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Lv = Leave</span>
+                  </div>
+
+                  <AnimatePresence>
+                    {Object.keys(pendingDailyChanges).length > 0 && (
+                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}>
+                        <Button onClick={saveDailyChanges} isLoading={isDailySaving} leftIcon={<FiSave />} size="sm" className="shadow-lg shadow-primary-500/20 px-6">
+                          Save {Object.keys(pendingDailyChanges).length} Change{Object.keys(pendingDailyChanges).length > 1 ? 's' : ''}
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <Table columns={columns} data={tableData} isLoading={isLoading} />
@@ -346,7 +432,8 @@ export default function Attendance() {
                         <tr><td colSpan={dateRange.length + 1} className="p-8 text-center text-slate-500">No active {role}s found.</td></tr>
                       ) : (
                         users.map((user, i) => {
-                          const userId = user.user || user._id;
+                          const rawUserId = typeof user.user === 'object' ? user.user?._id : user.user;
+                          const userId = rawUserId || user._id;
                           const isSelected = selectedUsers.includes(userId);
                           return (
                             <tr key={userId} className="border-b last:border-b-0 border-slate-100 dark:border-white/5 bg-white dark:bg-dark-900 hover:bg-slate-50 dark:hover:bg-dark-800/50">
@@ -441,29 +528,43 @@ export default function Attendance() {
 
                 {isHistoryLoading ? (
                   <div className="py-12 text-center text-primary-500">Loading...</div>
-                ) : historyData.length === 0 ? (
-                  <div className="py-12 text-center text-slate-500">No attendance records found for this month.</div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-96 overflow-y-auto pr-2">
-                    {historyData.map(record => {
-                      const dateObj = new Date(record.date);
-                      const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-                      const dayNum = dateObj.getDate();
-                      const colorClass = STATUS_COLORS[record.status] || STATUS_COLORS.default;
-                      
-                      return (
-                        <div key={record._id} className={`p-3 rounded-xl border ${colorClass.replace('bg-', 'border-').replace('text-', '')} bg-opacity-50 flex flex-col justify-between h-20 shadow-sm transition-all hover:-translate-y-0.5`}>
-                          <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">{dayName}</span>
-                            <span className="text-sm font-bold opacity-90">{dayNum}</span>
-                          </div>
-                          <div className="flex justify-between items-end">
-                            <span className="text-xs font-bold capitalize">{record.status.replace('_', ' ')}</span>
-                            {record.checkInTime && <span className="text-[9px] font-semibold opacity-70">{record.checkInTime}</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="w-full">
+                    <div className="grid grid-cols-7 gap-2 mb-2">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                        <div key={day} className="text-center text-xs font-bold text-slate-400 uppercase">{day}</div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-2">
+                      {(() => {
+                        const daysInMonth = new Date(historyYear, historyMonth, 0).getDate();
+                        const firstDay = new Date(historyYear, historyMonth - 1, 1).getDay(); // 0 is Sunday
+                        
+                        const calendarDays = [];
+                        for(let i=0; i<firstDay; i++) calendarDays.push(null);
+                        for(let i=1; i<=daysInMonth; i++) calendarDays.push(i);
+
+                        return calendarDays.map((day, index) => {
+                          if (!day) return <div key={`empty-${index}`} className="h-16 rounded-xl bg-slate-100/50 dark:bg-dark-900/50"></div>;
+                          
+                          const record = historyData.find(r => {
+                            const d = new Date(r.date);
+                            return d.getDate() === day && d.getMonth() + 1 === historyMonth && d.getFullYear() === historyYear;
+                          });
+
+                          const colorClass = record ? (STATUS_COLORS[record.status] || STATUS_COLORS.default) : 'bg-white dark:bg-dark-800 border-slate-200 dark:border-white/10 text-slate-400';
+                          const label = record ? STATUS_LABELS[record.status] : '-';
+                          const bgOp = record ? 'bg-opacity-20 dark:bg-opacity-20' : '';
+
+                          return (
+                            <div key={day} className={`relative flex flex-col items-center justify-center h-16 rounded-xl border ${record ? colorClass.replace('bg-', 'border-').replace('text-', '') + ' ' + bgOp : ''} shadow-sm transition-all hover:scale-105`}>
+                              <span className="absolute top-1 left-2 text-[10px] font-bold opacity-50">{day}</span>
+                              <span className={`text-lg font-bold ${record ? colorClass.split(' ').find(c => c.startsWith('text-')) || '' : ''}`}>{label}</span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>

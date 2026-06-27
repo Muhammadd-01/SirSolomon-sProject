@@ -1,6 +1,4 @@
 import Teacher from '../models/Teacher.js';
-import Student from '../models/Student.js';
-import Class from '../models/Class.js';
 import Notice from '../models/Notice.js';
 
 export const globalSearch = async (req, res, next) => {
@@ -17,13 +15,7 @@ export const globalSearch = async (req, res, next) => {
       $or: [{ fullName: regex }, { department: regex }, { subjects: { $in: [regex] } }]
     }).limit(5).select('fullName department profileImage');
 
-    const students = await Student.find({
-      $or: [{ fullName: regex }, { rollNumber: regex }]
-    }).populate('class', 'className').limit(5).select('fullName rollNumber profileImage class');
 
-    const classes = await Class.find({
-      className: regex
-    }).limit(5).select('className roomNumber');
 
     const notices = await Notice.find({
       $or: [{ title: regex }, { content: regex }]
@@ -33,8 +25,6 @@ export const globalSearch = async (req, res, next) => {
       success: true,
       data: {
         teachers,
-        students,
-        classes,
         notices
       }
     });

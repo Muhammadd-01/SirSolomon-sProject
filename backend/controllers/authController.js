@@ -1,6 +1,5 @@
 import User from '../models/User.js';
 import Teacher from '../models/Teacher.js';
-import Student from '../models/Student.js';
 import ActivityLog from '../models/ActivityLog.js';
 import { generateAccessToken, generateRefreshToken, setTokenCookies } from '../utils/generateToken.js';
 import { ROLES } from '../config/constants.js';
@@ -25,7 +24,6 @@ export const register = async (req, res, next) => {
       role: role || ROLES.PRINCIPAL, // Default to principal for initial setup
     });
 
-    // Create corresponding profile based on role
     if (role === ROLES.TEACHER) {
       await Teacher.create({
         user: user._id,
@@ -33,12 +31,6 @@ export const register = async (req, res, next) => {
         email: email,
         phone: req.body.phone || '0000000000',
         basicSalary: req.body.basicSalary || 0
-      });
-    } else if (role === ROLES.STUDENT) {
-      await Student.create({
-        user: user._id,
-        fullName: name,
-        rollNumber: req.body.rollNumber || `STU${Date.now().toString().slice(-4)}`
       });
     }
 

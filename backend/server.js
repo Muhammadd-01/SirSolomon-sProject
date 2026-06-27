@@ -12,17 +12,12 @@ import mongoose from 'mongoose';
 import { connectDB } from './config/db.js';
 import User from './models/User.js';
 import Settings from './models/Settings.js';
+import { initCronJobs } from './utils/cronJobs.js';
 
 import authRoutes from './routes/auth.js';
 import teacherRoutes from './routes/teachers.js';
-import studentRoutes from './routes/students.js';
-import classRoutes from './routes/classes.js';
-import subjectRoutes from './routes/subjects.js';
 import attendanceRoutes from './routes/attendance.js';
 import salaryRoutes from './routes/salary.js';
-import feeRoutes from './routes/fees.js';
-import examRoutes from './routes/exams.js';
-import resultRoutes from './routes/results.js';
 import noticeRoutes from './routes/notices.js';
 import dashboardRoutes from './routes/dashboard.js';
 import profileRoutes from './routes/profile.js';
@@ -73,14 +68,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/teachers', teacherRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/classes', classRoutes);
-app.use('/api/subjects', subjectRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/salary', salaryRoutes);
-app.use('/api/fees', feeRoutes);
-app.use('/api/exams', examRoutes);
-app.use('/api/results', resultRoutes);
 app.use('/api/notices', noticeRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/profile', profileRoutes);
@@ -130,6 +119,7 @@ const startServer = async () => {
     // 3. Start Express
     app.listen(PORT, () => {
       console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+      initCronJobs();
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);

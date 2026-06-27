@@ -71,11 +71,22 @@ export const generateSalarySlipPDF = (salaryData, res) => {
   currentY += 15;
   drawRow(currentY, `Late Deduction (${salaryData.lateDays} lates = ${salaryData.absenceDueToLate} absents)`, `PKR ${salaryData.lateAbsenceDeduction}`);
   currentY += 15;
-  drawRow(currentY, `Advance Deduction`, `PKR ${salaryData.advance}`);
-  currentY += 15;
+  
+  if (salaryData.advance > 0) {
+    drawRow(currentY, `Advance Deduction`, `PKR ${salaryData.advance}`);
+    currentY += 15;
+  }
+  
+  if (salaryData.appliedComponents && salaryData.appliedComponents.length > 0) {
+    salaryData.appliedComponents.filter(c => c.type === 'deduction').forEach(comp => {
+      drawRow(currentY, `${comp.name} ${comp.isPercentage ? `(${comp.originalAmount}%)` : ''}`, `PKR ${comp.calculatedAmount}`);
+      currentY += 15;
+    });
+  }
   
   doc.fontSize(10);
-  drawRow(currentY, 'Total Deductions', `PKR ${salaryData.totalDeductions}`, true);
+  const totalDeductions = salaryData.totalDeductions + (salaryData.customDeductions || 0);
+  drawRow(currentY, 'Total Deductions', `PKR ${totalDeductions}`, true);
   currentY += 25;
 
   // 2. GROSS PAY
@@ -85,8 +96,8 @@ export const generateSalarySlipPDF = (salaryData, res) => {
   doc.fillColor('#000000');
   currentY += 30;
 
-  // 3. ALLOWANCES
-  drawSectionHeader(currentY, 'Allowances');
+  // 3. ALLOWANCES & ADDITIONS
+  drawSectionHeader(currentY, 'Allowances & Additions');
   currentY += 20;
   
   doc.fontSize(9);
@@ -95,42 +106,39 @@ export const generateSalarySlipPDF = (salaryData, res) => {
   drawRow(currentY, `Punctuality (<4 lates)`, `PKR ${salaryData.punctualityAllowance}`);
   currentY += 15;
   
+  if (salaryData.appliedComponents && salaryData.appliedComponents.length > 0) {
+    salaryData.appliedComponents.filter(c => c.type === 'addition').forEach(comp => {
+      drawRow(currentY, `${comp.name} ${comp.isPercentage ? `(${comp.originalAmount}%)` : ''}`, `PKR ${comp.calculatedAmount}`);
+      currentY += 15;
+    });
+  }
+
+  if (salaryData.juneSalary > 0) {
+    drawRow(currentY, 'June Salary', `PKR ${salaryData.juneSalary}`);
+    currentY += 15;
+  }
+  if (salaryData.julySalary > 0) {
+    drawRow(currentY, 'July Salary', `PKR ${salaryData.julySalary}`);
+    currentY += 15;
+  }
+  if (salaryData.bonus > 0) {
+    drawRow(currentY, 'Bonus', `PKR ${salaryData.bonus}`);
+    currentY += 15;
+  }
+  
   doc.fontSize(10);
-  drawRow(currentY, 'Total Allowance', `PKR ${salaryData.totalAllowance}`, true);
+  const totalAllowancesAndAdditions = salaryData.totalAllowance + salaryData.totalAdditions + (salaryData.customAdditions || 0);
+  drawRow(currentY, 'Total Additions', `PKR ${totalAllowancesAndAdditions}`, true);
   currentY += 25;
-
-  // 4. NET PAY
-  doc.rect(30, currentY - 5, 350, 20).fill('#e0f2fe');
-  doc.fillColor('#1e3a8a');
-  drawRow(currentY, 'NET PAY (Gross + Allowances)', `PKR ${salaryData.netPay}`, true);
-  doc.fillColor('#000000');
-  currentY += 30;
-
-  // 5. ADDITIONS
-  if (salaryData.totalAdditions > 0) {
-    drawSectionHeader(currentY, 'Additions');
-    currentY += 20;
-    
-    doc.fontSize(9);
-    if (salaryData.juneSalary > 0) {
-      drawRow(currentY, 'June Salary', `PKR ${salaryData.juneSalary}`);
-      currentY += 15;
-    }
-    if (salaryData.julySalary > 0) {
-      drawRow(currentY, 'July Salary', `PKR ${salaryData.julySalary}`);
-      currentY += 15;
-    }
-    if (salaryData.bonus > 0) {
-      drawRow(currentY, 'Bonus', `PKR ${salaryData.bonus}`);
-      currentY += 15;
-    }
-    
-    doc.fontSize(10);
-    drawRow(currentY, 'Total Additions', `PKR ${salaryData.totalAdditions}`, true);
+  
+  if (salaryData.taxAmount > 0) {
+    doc.fillColor('#ef4444');
+    drawRow(currentY, `Tax Deduction`, `- PKR ${salaryData.taxAmount}`, true);
+    doc.fillColor('#000000');
     currentY += 25;
   }
 
-  // 6. PAYABLE SALARY
+  // 4. PAYABLE SALARY
   doc.rect(30, currentY - 5, 350, 25).fill('#1e3a8a');
   doc.fillColor('#ffffff');
   drawRow(currentY, 'FINAL PAYABLE SALARY', `PKR ${salaryData.payableSalary}`, true);

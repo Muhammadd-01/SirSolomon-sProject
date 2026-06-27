@@ -1,0 +1,4 @@
+MongoDB Connected: localhost
+🚀 Server running in development mode on port 5001
+✅ Cron jobs initialized.
+[0mPOST /api/teachers [32m201[0m 115.497 ms - 663[0m
