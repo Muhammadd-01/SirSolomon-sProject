@@ -216,7 +216,7 @@ export const getSalaries = async (req, res, next) => {
     if (status) query.status = status;
     if (teacherId) query.teacher = teacherId;
 
-    const salaries = await Salary.find(query).populate('teacher', 'fullName department profileImage');
+    const salaries = await Salary.find(query).populate('teacher', 'fullName department profileImage teacherId');
     res.status(200).json({ success: true, data: salaries });
   } catch (error) {
     next(error);

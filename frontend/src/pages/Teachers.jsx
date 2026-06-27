@@ -27,7 +27,7 @@ export default function Teachers() {
     cnic: '',
     phone: '',
     email: '',
-    password: '',
+    teacherId: '',
     dob: '',
     gender: 'Male',
     address: '',
@@ -82,6 +82,7 @@ export default function Teachers() {
       cnic: teacher.cnic || '',
       phone: teacher.phone || '',
       email: teacher.email || '',
+      teacherId: teacher.teacherId || '',
       dob: teacher.dob ? teacher.dob.split('T')[0] : '',
       gender: teacher.gender || 'Male',
       address: teacher.address || '',
@@ -180,7 +181,7 @@ export default function Teachers() {
   const openNewModal = () => {
     setEditingTeacher(null);
     setFormData({
-      fullName: '', guardianName: '', cnic: '', phone: '', email: '', password: '', dob: '', gender: 'Male', address: '', reference: '', academicQualification: '', professionalQualification: '', experience: '', previousSchool: '', subjects: '', assignedClass: '', assignedSection: '', department: '', joiningDate: new Date().toISOString().split('T')[0], basicSalary: 0, status: 'Active', remarks: ''
+      fullName: '', guardianName: '', cnic: '', phone: '', email: '', teacherId: '', dob: '', gender: 'Male', address: '', reference: '', academicQualification: '', professionalQualification: '', experience: '', previousSchool: '', subjects: '', assignedClass: '', assignedSection: '', department: '', joiningDate: new Date().toISOString().split('T')[0], basicSalary: 0, status: 'Active', remarks: ''
     });
     setSelectedFile(null);
     setPreviewUrl('');
@@ -276,6 +277,10 @@ export default function Teachers() {
                   <FiUser className="w-4 h-4 mr-3 text-slate-400" />
                   <span className="truncate">CNIC: {teacher.cnic || 'N/A'}</span>
                 </div>
+                <div className="flex items-center text-sm text-slate-600 dark:text-slate-400">
+                  <FiUser className="w-4 h-4 mr-3 text-slate-400" />
+                  <span className="truncate">ID: {teacher.teacherId || 'N/A'}</span>
+                </div>
               </div>
 
               {/* Footer Actions */}
@@ -297,7 +302,7 @@ export default function Teachers() {
 
       {/* Add/Edit Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingTeacher ? 'Edit Teacher Profile' : 'Register New Teacher'} className="max-w-4xl">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-8">
           
           {/* Image Upload Area */}
           <div className="flex justify-center mb-6">
@@ -316,10 +321,10 @@ export default function Teachers() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
             {/* Core Info */}
             <div className="col-span-1 md:col-span-2">
-              <h4 className="text-lg font-semibold border-b border-slate-200 dark:border-slate-700 pb-2 mb-2 text-slate-800 dark:text-white">Personal Details</h4>
+              <h4 className="text-lg font-semibold border-b-2 border-primary-200 dark:border-primary-800 pb-3 mb-1 text-slate-800 dark:text-white flex items-center gap-2"><span className="w-1.5 h-5 bg-primary-500 rounded-full inline-block"></span>Personal Details</h4>
             </div>
             
             <Input label="Full Name" required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
@@ -328,9 +333,7 @@ export default function Teachers() {
             <Input label="Cell #" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
             <Input label="Email" type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
             
-            {!editingTeacher && (
-              <Input label="Login Password" required type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-            )}
+            <Input label="Teacher ID" required value={formData.teacherId} onChange={e => setFormData({...formData, teacherId: e.target.value})} />
             
             <Input 
               label="CNIC Number" 
@@ -350,14 +353,14 @@ export default function Teachers() {
             />
             <Input label="Date of Birth" type="date" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} />
             
-            <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
               <Input label="Address" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
               <Input label="Reference" value={formData.reference} onChange={e => setFormData({...formData, reference: e.target.value})} />
             </div>
 
             {/* Academic & Professional */}
-            <div className="col-span-1 md:col-span-2 mt-4">
-              <h4 className="text-lg font-semibold border-b border-slate-200 dark:border-slate-700 pb-2 mb-2 text-slate-800 dark:text-white">Qualifications & Experience</h4>
+            <div className="col-span-1 md:col-span-2 mt-6">
+              <h4 className="text-lg font-semibold border-b-2 border-primary-200 dark:border-primary-800 pb-3 mb-1 text-slate-800 dark:text-white flex items-center gap-2"><span className="w-1.5 h-5 bg-primary-500 rounded-full inline-block"></span>Qualifications & Experience</h4>
             </div>
             
             <Input label="Academic Qualifications (e.g. MA, MSc)" value={formData.academicQualification} onChange={e => setFormData({...formData, academicQualification: e.target.value})} />
@@ -379,8 +382,8 @@ export default function Teachers() {
             </div>
 
             {/* Employment Details */}
-            <div className="col-span-1 md:col-span-2 mt-4">
-              <h4 className="text-lg font-semibold border-b border-slate-200 dark:border-slate-700 pb-2 mb-2 text-slate-800 dark:text-white">Employment Details</h4>
+            <div className="col-span-1 md:col-span-2 mt-6">
+              <h4 className="text-lg font-semibold border-b-2 border-primary-200 dark:border-primary-800 pb-3 mb-1 text-slate-800 dark:text-white flex items-center gap-2"><span className="w-1.5 h-5 bg-primary-500 rounded-full inline-block"></span>Employment Details</h4>
             </div>
 
             <Input label="Class Assigned" value={formData.assignedClass} onChange={e => setFormData({...formData, assignedClass: e.target.value})} />

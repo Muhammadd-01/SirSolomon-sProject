@@ -232,6 +232,7 @@ export default function Salary() {
     if (salaries.length === 0) { showError('No data to export'); return; }
     const worksheetData = salaries.map((s, i) => ({
       '#': i + 1,
+      'Teacher ID': s.teacher?.teacherId || 'N/A',
       'Teacher': s.teacher?.fullName || 'N/A',
       'Basic': s.basicSalary,
       'Days': s.totalWorkingDays,

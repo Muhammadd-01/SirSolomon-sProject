@@ -38,7 +38,7 @@ export const getTeacher = async (req, res, next) => {
 
 export const createTeacher = async (req, res, next) => {
   try {
-    const { email, password, fullName, phone, basicSalary, ...teacherData } = req.body;
+    const { email, teacherId, fullName, phone, basicSalary, ...teacherData } = req.body;
 
     // Handle profile image if uploaded
     let profileImage = '';
@@ -52,7 +52,7 @@ export const createTeacher = async (req, res, next) => {
     const user = await User.create({
       name: fullName,
       email,
-      password,
+      password: teacherId, // Default password is the Teacher ID
       role: ROLES.TEACHER,
       profileImage, // save to user profile as well
     });
@@ -66,6 +66,7 @@ export const createTeacher = async (req, res, next) => {
 
     const teacher = await Teacher.create({
       user: user._id,
+      teacherId,
       fullName,
       email,
       phone,
