@@ -6,28 +6,38 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Common helper for headers
+const signaturePath = path.join(__dirname, '..', 'public', 'images', 'principal_signature.png');
+const logoPath = path.join(__dirname, '..', 'public', 'images', 'logo.png'); // Using png
+
+const professionalNote = "Note: This computer-generated document requires no signature and is not acceptable in court.";
+
 const buildHeader = (doc, title, subtitle) => {
+  if (fs.existsSync(logoPath)) {
+    doc.save();
+    doc.roundedRect(25, 20, 40, 40, 8).clip();
+    doc.image(logoPath, 25, 20, { width: 40, height: 40 });
+    doc.restore();
+  }
+
   doc
     .fillColor('#1e3a8a') // Navy primary
-    .fontSize(18)
-    .text("Sir Solomon's School", { align: 'center' })
-    .fillColor('#4b5563')
-    .fontSize(10)
-    .text('123 Education Lane, Learning City, PK', { align: 'center' })
-    .text('Phone: +92 300 1234567 | Email: info@sirsolomons.edu', { align: 'center' })
-    .moveDown()
-    .fillColor('#1f2937')
+    .font('Helvetica-Bold')
     .fontSize(14)
-    .text(title, { align: 'center', underline: true })
-    .moveDown(0.5);
+    .text("Sir Solomon's School", 20, 20, { align: 'center', width: 380 })
+    .fillColor('#4b5563')
+    .font('Helvetica')
+    .fontSize(8)
+    .text('123 Education Lane, Learning City, PK', 20, 36, { align: 'center', width: 380 })
+    .text('Phone: +92 300 1234567 | Email: info@sirsolomons.edu', 20, 46, { align: 'center', width: 380 })
+    .fillColor('#1f2937')
+    .font('Helvetica-Bold')
+    .fontSize(12)
+    .text(title, 20, 65, { align: 'center', width: 380, underline: true });
     
   if (subtitle) {
-    doc.fontSize(10).text(subtitle, { align: 'center' }).moveDown();
+    doc.font('Helvetica').fontSize(8).text(subtitle, 20, 80, { align: 'center', width: 380 });
   }
 };
-
-
 
 function numberToWords(num) {
   const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
@@ -69,9 +79,14 @@ function calculateAge(dob) {
 }
 
 export const generateSalarySlipPDF = (salaryData, res) => {
-  const doc = new PDFDocument({ margin: 25, size: 'A4' });
+  const doc = new PDFDocument({ size: 'A5', margins: { top: 20, bottom: 10, left: 20, right: 20 }, autoFirstPage: true });
+  
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename=salary-slip-${salaryData.month}-${salaryData.year}.pdf`);
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const safeName = salaryData.teacher?.fullName?.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee';
+  const tId = salaryData.teacher?.teacherId || 'NoID';
+  const monthName = monthNames[salaryData.month - 1] || salaryData.month;
+  res.setHeader('Content-Disposition', `attachment; filename=salary-slip-${tId}-${safeName}-${monthName}-${salaryData.year}.pdf`);
   doc.pipe(res);
 
   const teacher = salaryData.teacher;
@@ -85,282 +100,321 @@ export const generateSalarySlipPDF = (salaryData, res) => {
   const mutedTextColor = '#475569'; // Slate-600
   const borderColor = '#a7f3d0'; // Emerald-200
 
-  // Outer border with double styling (emerald theme)
-  doc.rect(20, 20, 555, 802).lineWidth(2).strokeColor(primaryColor).stroke();
-  doc.rect(23, 23, 549, 796).lineWidth(0.5).strokeColor(borderColor).stroke();
-
   // Decorative header ribbon
-  doc.rect(24, 24, 547, 6).fill(primaryColor);
+  doc.rect(18, 18, 384, 4).fill(primaryColor);
 
-  // School Header Info
-  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(22);
-  doc.text("Sir Solomon's Secondary School", 30, 42, { align: 'center' });
+  if (fs.existsSync(logoPath)) {
+    doc.save();
+    doc.roundedRect(25, 28, 45, 45, 10).clip();
+    doc.image(logoPath, 25, 28, { width: 45, height: 45 });
+    doc.restore();
+  }
+
+  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(16);
+  doc.text("Sir Solomon's Secondary School", 20, 30, { align: 'center', width: 380 });
   
-  doc.fillColor(mutedTextColor).font('Helvetica-Oblique').fontSize(10);
-  doc.text("(Regd. & Recog.)", 30, 68, { align: 'center' });
+  doc.fillColor(mutedTextColor).font('Helvetica-Oblique').fontSize(8);
+  doc.text("(Regd. & Recog.)", 20, 48, { align: 'center', width: 380 });
   
-  doc.fillColor(darkTextColor).font('Helvetica').fontSize(9.5);
-  doc.text("House # R-45, R-202, R-203, R-204, Sector 31/B, K.D.A Employee's Korangi", 30, 83, { align: 'center' });
-  doc.font('Helvetica-Bold').text("Cell # 0333-2310974 , 0333-2255877", 30, 98, { align: 'center' });
+  doc.fillColor(darkTextColor).font('Helvetica').fontSize(7);
+  doc.text("House # R-45, R-202, R-203, R-204, Sector 31/B, K.D.A Employee's Korangi", 20, 60, { align: 'center', width: 380 });
+  doc.font('Helvetica-Bold').text("Cell # 0333-2310974 , 0333-2255877", 20, 70, { align: 'center', width: 380 });
 
   // Salary Slip Title Badge
-  doc.roundedRect(227, 120, 140, 24, 4).fill(primaryColor);
-  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(11).text("SALARY SLIP", 227, 127, { width: 140, align: 'center' });
+  doc.roundedRect(150, 85, 120, 18, 3).fill(primaryColor);
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9).text("SALARY SLIP", 150, 90, { width: 120, align: 'center' });
 
   // For the Month line
-  doc.fillColor(darkTextColor).font('Helvetica-Bold').fontSize(10);
-  doc.text(`For the Month of: ${getMonthName(salaryData.month)} ${salaryData.year}`, 30, 155, { align: 'center' });
+  doc.fillColor(darkTextColor).font('Helvetica-Bold').fontSize(8);
+  doc.text(`For the Month of: ${getMonthName(salaryData.month)} ${salaryData.year}`, 20, 110, { align: 'center', width: 380 });
 
   // --- Section 1: Personal Information ---
-  let cy = 180;
+  let cy = 120;
   
-  // Section Header bar
-  doc.rect(25, cy, 545, 18).fill(lightBg);
-  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(10).text("PERSONAL INFORMATION", 35, cy + 4);
-  doc.fillColor(mutedTextColor).font('Helvetica').fontSize(9).text(`Date: ${formatDate(new Date())}`, 480, cy + 5);
+  doc.rect(20, cy, 380, 14).fill(lightBg);
+  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(8).text("PERSONAL INFORMATION", 25, cy + 3);
+  doc.fillColor(mutedTextColor).font('Helvetica').fontSize(7).text(`Date: ${formatDate(new Date())}`, 330, cy + 4);
   
-  // Inner Border for Personal Info Grid
-  cy += 18;
-  doc.rect(25, cy, 545, 160).lineWidth(1).strokeColor(borderColor).stroke();
+  cy += 14;
+  doc.rect(20, cy, 380, 110).lineWidth(0.5).strokeColor(borderColor).stroke();
 
-  // Grid Data
-  doc.fillColor(darkTextColor).font('Helvetica');
-  let rowY = cy + 12;
-  const col1 = 35;
-  const col2 = 310;
+  // Teacher Image inside Personal Info Box
+  if (teacher.profileImage) {
+    const cleanPath = teacher.profileImage.startsWith('/') ? teacher.profileImage.substring(1) : teacher.profileImage;
+    const profileImagePath = path.join(__dirname, '..', cleanPath);
+    if (fs.existsSync(profileImagePath)) {
+      doc.save();
+      doc.roundedRect(330, cy + 8, 60, 60, 6).lineWidth(0.5).strokeColor(borderColor).stroke();
+      doc.roundedRect(330, cy + 8, 60, 60, 6).clip();
+      doc.image(profileImagePath, 330, cy + 8, { width: 60, height: 60 });
+      doc.restore();
+    }
+  }
+
+  doc.fillColor(darkTextColor).font('Helvetica').fontSize(7);
+  let rowY = cy + 6;
+  const col1 = 25;
+  const col2 = 200; // Shifted slightly left to make room for image
 
   // Row 1: ID & Guardian Name
-  doc.font('Helvetica-Bold').text("I.D :", col1, rowY).font('Helvetica').text(teacher.teacherId || 'N/A', col1 + 110, rowY);
-  doc.font('Helvetica-Bold').text("D/O, S/O, W/O :", col2, rowY).font('Helvetica').text(teacher.guardianName || 'N/A', col2 + 110, rowY);
+  doc.font('Helvetica-Bold').text("I.D :", col1, rowY).font('Helvetica').text(teacher.teacherId || 'N/A', col1 + 75, rowY);
+  doc.font('Helvetica-Bold').text("D/O, S/O, W/O :", col2, rowY).font('Helvetica').text(teacher.guardianName || 'N/A', col2 + 75, rowY, { width: 50 });
   
   // Row 2: Name & DOB
-  rowY += 20;
-  doc.font('Helvetica-Bold').text("Name :", col1, rowY).font('Helvetica').text(teacher.fullName || 'N/A', col1 + 110, rowY);
-  doc.font('Helvetica-Bold').text("D.O.B :", col2, rowY).font('Helvetica').text(formatDate(teacher.dob), col2 + 110, rowY);
+  rowY += 15;
+  doc.font('Helvetica-Bold').text("Name :", col1, rowY).font('Helvetica').text(teacher.fullName || 'N/A', col1 + 75, rowY);
+  doc.font('Helvetica-Bold').text("D.O.B :", col2, rowY).font('Helvetica').text(formatDate(teacher.dob), col2 + 75, rowY);
   
   // Row 3: CNIC & Designation
-  rowY += 20;
-  doc.font('Helvetica-Bold').text("CNIC # :", col1, rowY).font('Helvetica').text(teacher.cnic || 'N/A', col1 + 110, rowY);
-  doc.font('Helvetica-Bold').text("DESIGNATION :", col2, rowY).font('Helvetica').text(teacher.department || 'Teacher', col2 + 110, rowY);
+  rowY += 15;
+  doc.font('Helvetica-Bold').text("CNIC # :", col1, rowY).font('Helvetica').text(teacher.cnic || 'N/A', col1 + 75, rowY);
+  doc.font('Helvetica-Bold').text("DESIGNATION :", col2, rowY).font('Helvetica').text(teacher.department || 'Teacher', col2 + 75, rowY);
   
   // Row 4: Cell & June/July Status
-  rowY += 20;
-  doc.font('Helvetica-Bold').text("CELL # :", col1, rowY).font('Helvetica').text(teacher.phone || 'N/A', col1 + 110, rowY);
-  doc.font('Helvetica-Bold').text("June / July Status :", col2, rowY).font('Helvetica').text("NO", col2 + 110, rowY);
+  rowY += 15;
+  doc.font('Helvetica-Bold').text("CELL # :", col1, rowY).font('Helvetica').text(teacher.phone || 'N/A', col1 + 75, rowY);
+  doc.font('Helvetica-Bold').text("June / July Status :", col2, rowY).font('Helvetica').text("NO", col2 + 75, rowY);
   
   // Row 5: Address & Age
-  rowY += 20;
-  doc.font('Helvetica-Bold').text("ADDRESS :", col1, rowY).font('Helvetica').text(teacher.address || 'N/A', col1 + 110, rowY, { width: 160 });
-  doc.font('Helvetica-Bold').text("AGE :", col2, rowY).font('Helvetica').text(`${age.years} Years, ${age.months} Months, ${age.days} Days`, col2 + 110, rowY);
+  rowY += 15;
+  doc.font('Helvetica-Bold').text("ADDRESS :", col1, rowY).font('Helvetica').text(teacher.address || 'N/A', col1 + 75, rowY, { width: 110 });
+  doc.font('Helvetica-Bold').text("AGE :", col2, rowY).font('Helvetica').text(`${age.years} Y, ${age.months} M, ${age.days} D`, col2 + 75, rowY);
   
   // Row 6: Qualifications & Joining Date
-  rowY += 20;
+  rowY += 15;
   const quals = [teacher.academicQualification, teacher.professionalQualification].filter(Boolean).join(' / ') || 'N/A';
-  doc.font('Helvetica-Bold').text("QUALIFICATIONS :", col1, rowY).font('Helvetica').text(quals, col1 + 110, rowY);
-  doc.font('Helvetica-Bold').text("D.O.JOINING :", col2, rowY).font('Helvetica').text(formatDate(teacher.joiningDate), col2 + 110, rowY);
+  doc.font('Helvetica-Bold').text("QUALIFICATIONS :", col1, rowY).font('Helvetica').text(quals, col1 + 75, rowY);
+  doc.font('Helvetica-Bold').text("D.O.JOINING :", col2, rowY).font('Helvetica').text(formatDate(teacher.joiningDate), col2 + 75, rowY);
 
   // Row 7: Service Length
-  rowY += 20;
-  doc.font('Helvetica-Bold').text("SERVICE LENGTH :", col2, rowY).font('Helvetica').text(`${service.years} Years, ${service.months} Months, ${service.days} Days`, col2 + 110, rowY);
-
+  rowY += 15;
+  doc.font('Helvetica-Bold').text("SERVICE LENGTH :", col2, rowY).font('Helvetica').text(`${service.years} Y, ${service.months} M, ${service.days} D`, col2 + 75, rowY);
 
   // --- Section 2: Attendance ---
-  cy += 175;
-  doc.rect(25, cy, 545, 18).fill(lightBg);
-  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(10).text("ATTENDANCE OF THE MONTH", 35, cy + 4);
+  cy += 116;
+  doc.rect(20, cy, 380, 14).fill(lightBg);
+  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(8).text("ATTENDANCE OF THE MONTH", 25, cy + 3);
   
-  cy += 18;
-  doc.rect(25, cy, 545, 55).lineWidth(1).strokeColor(borderColor).stroke();
+  cy += 14;
+  doc.rect(20, cy, 380, 36).lineWidth(0.5).strokeColor(borderColor).stroke();
   
-  rowY = cy + 10;
-  doc.fillColor(darkTextColor).font('Helvetica');
-  doc.font('Helvetica-Bold').text("Working Days :", col1, rowY).font('Helvetica').text(salaryData.totalWorkingDays.toString(), col1 + 110, rowY);
-  doc.font('Helvetica-Bold').text("Presents :", 220, rowY).font('Helvetica').text(salaryData.presentDays.toString(), 220 + 70, rowY);
-  doc.font('Helvetica-Bold').text("Absents :", 400, rowY).font('Helvetica').text(salaryData.absentDays.toString(), 400 + 70, rowY);
+  rowY = cy + 6;
+  doc.fillColor(darkTextColor).font('Helvetica').fontSize(7);
+  doc.font('Helvetica-Bold').text("Working Days :", col1, rowY).font('Helvetica').text(salaryData.totalWorkingDays.toString(), col1 + 75, rowY);
+  doc.font('Helvetica-Bold').text("Presents :", 160, rowY).font('Helvetica').text(salaryData.presentDays.toString(), 160 + 50, rowY);
+  doc.font('Helvetica-Bold').text("Absents :", 290, rowY).font('Helvetica').text(salaryData.absentDays.toString(), 290 + 45, rowY);
 
-  rowY += 20;
-  doc.font('Helvetica-Bold').text("Late Days :", col1, rowY).font('Helvetica').text(salaryData.lateDays.toString(), col1 + 110, rowY);
-  doc.font('Helvetica-Bold').text("Late Absents :", 220, rowY).font('Helvetica').text((salaryData.absenceDueToLate || 0).toString(), 220 + 90, rowY);
-  doc.font('Helvetica-Bold').text("Total Absents :", 400, rowY).font('Helvetica').text((salaryData.absentDays + (salaryData.absenceDueToLate || 0)).toString(), 400 + 95, rowY);
-
+  rowY += 15;
+  doc.font('Helvetica-Bold').text("Late Days :", col1, rowY).font('Helvetica').text(salaryData.lateDays.toString(), col1 + 75, rowY);
+  doc.font('Helvetica-Bold').text("Late Absents :", 160, rowY).font('Helvetica').text((salaryData.absenceDueToLate || 0).toString(), 160 + 60, rowY);
+  doc.font('Helvetica-Bold').text("Total Absents :", 290, rowY).font('Helvetica').text((salaryData.absentDays + (salaryData.absenceDueToLate || 0)).toString(), 290 + 65, rowY);
 
   // --- Section 3: Allowances & Deductions ---
-  cy += 70;
-  // Let's create two parallel cards for Allowance and Deductions side-by-side
-  const cardWidth = 265;
-  const colLeft = 25;
-  const colRight = 305;
+  cy += 42;
+  const cardWidth = 185;
+  const colLeft = 20;
+  const colRight = 215;
 
   // Left card (Allowances)
-  doc.rect(colLeft, cy, cardWidth, 18).fill(lightBg);
-  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(10).text("ALLOWANCES CALCULATION", colLeft + 10, cy + 4);
+  doc.rect(colLeft, cy, cardWidth, 14).fill(lightBg);
+  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(7.5).text("ALLOWANCES CALCULATION", colLeft + 5, cy + 3);
   
-  doc.rect(colLeft, cy + 18, cardWidth, 75).lineWidth(1).strokeColor(borderColor).stroke();
-  doc.fillColor(darkTextColor).font('Helvetica');
-  doc.text("Regularity Allowance :", colLeft + 10, cy + 28).text(`Rs. ${salaryData.attendanceAllowance || 0}`, colLeft + 160, cy + 28, { align: 'right', width: 90 });
-  doc.text("Punctuality Allowance :", colLeft + 10, cy + 48).text(`Rs. ${salaryData.punctualityAllowance || 0}`, colLeft + 160, cy + 48, { align: 'right', width: 90 });
-  doc.font('Helvetica-Bold').text("Total Allowance :", colLeft + 10, cy + 70).text(`Rs. ${salaryData.totalAllowance}`, colLeft + 160, cy + 70, { align: 'right', width: 90 });
+  doc.rect(colLeft, cy + 14, cardWidth, 50).lineWidth(0.5).strokeColor(borderColor).stroke();
+  doc.fillColor(darkTextColor).font('Helvetica').fontSize(7);
+  doc.text("Regularity Allowance :", colLeft + 5, cy + 22).text(`Rs. ${salaryData.attendanceAllowance || 0}`, colLeft + 110, cy + 22, { align: 'right', width: 65 });
+  doc.text("Punctuality Allowance :", colLeft + 5, cy + 36).text(`Rs. ${salaryData.punctualityAllowance || 0}`, colLeft + 110, cy + 36, { align: 'right', width: 65 });
+  doc.font('Helvetica-Bold').text("Total Allowance :", colLeft + 5, cy + 50).text(`Rs. ${salaryData.totalAllowance}`, colLeft + 110, cy + 50, { align: 'right', width: 65 });
 
   // Right card (Deductions)
-  doc.rect(colRight, cy, cardWidth, 18).fill('#fef2f2'); // soft red background
-  doc.fillColor('#991b1b').font('Helvetica-Bold').fontSize(10).text("DEDUCTIONS", colRight + 10, cy + 4);
+  doc.rect(colRight, cy, cardWidth, 14).fill('#fef2f2'); // soft red background
+  doc.fillColor('#991b1b').font('Helvetica-Bold').fontSize(7.5).text("DEDUCTIONS", colRight + 5, cy + 3);
   
-  doc.rect(colRight, cy + 18, cardWidth, 75).lineWidth(1).strokeColor('#fca5a5').stroke();
-  doc.fillColor(darkTextColor).font('Helvetica');
+  doc.rect(colRight, cy + 14, cardWidth, 50).lineWidth(0.5).strokeColor('#fca5a5').stroke();
+  doc.fillColor(darkTextColor).font('Helvetica').fontSize(7);
   const absentDeductVal = salaryData.absenceDeduction + salaryData.lateAbsenceDeduction;
-  doc.text("Absents Amount :", colRight + 10, cy + 28).text(`Rs. ${absentDeductVal}`, colRight + 160, cy + 28, { align: 'right', width: 90 });
-  doc.text("Advance / Other :", colRight + 10, cy + 48).text(`Rs. ${salaryData.advance}`, colRight + 160, cy + 48, { align: 'right', width: 90 });
-  doc.font('Helvetica-Bold').text("Total Deductions :", colRight + 10, cy + 70).text(`Rs. ${salaryData.totalDeductions}`, colRight + 160, cy + 70, { align: 'right', width: 90 });
-
+  doc.text("Absents Amount :", colRight + 5, cy + 22).text(`Rs. ${absentDeductVal}`, colRight + 110, cy + 22, { align: 'right', width: 65 });
+  doc.text("Advance / Other :", colRight + 5, cy + 36).text(`Rs. ${salaryData.advance}`, colRight + 110, cy + 36, { align: 'right', width: 65 });
+  doc.font('Helvetica-Bold').text("Total Deductions :", colRight + 5, cy + 50).text(`Rs. ${salaryData.totalDeductions}`, colRight + 110, cy + 50, { align: 'right', width: 65 });
 
   // --- Section 4: Salary Calculations ---
-  cy += 110;
-  doc.rect(25, cy, 545, 18).fill(lightBg);
-  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(10).text("SALARY CALCULATIONS", 35, cy + 4);
+  cy += 70;
+  doc.rect(20, cy, 380, 14).fill(lightBg);
+  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(8).text("SALARY CALCULATIONS", 25, cy + 3);
   
-  cy += 18;
-  doc.rect(25, cy, 545, 160).lineWidth(1).strokeColor(borderColor).stroke();
+  cy += 14;
+  doc.rect(20, cy, 380, 100).lineWidth(0.5).strokeColor(borderColor).stroke();
 
-  rowY = cy + 10;
-  doc.fillColor(darkTextColor).font('Helvetica');
-  doc.font('Helvetica-Bold').text("Basic Salary of the Month :", col1, rowY).font('Helvetica').text(`Rs. ${salaryData.basicSalary}   /=`, col1 + 170, rowY);
+  rowY = cy + 6;
+  doc.fillColor(darkTextColor).font('Helvetica').fontSize(7.5);
+  doc.font('Helvetica-Bold').text("Basic Salary of the Month :", col1, rowY).font('Helvetica').text(`Rs. ${salaryData.basicSalary}   /=`, col1 + 120, rowY);
   
   // Per day salary box
-  doc.roundedRect(420, rowY - 4, 135, 20, 2).fill(primaryColor);
-  doc.fillColor('#ffffff').font('Helvetica-Bold').text(`Per Day Salary: Rs. ${salaryData.perDaySalary}`, 420, rowY, { width: 135, align: 'center' });
+  doc.roundedRect(300, rowY - 3, 90, 14, 2).fill(primaryColor);
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(7).text(`Per Day: Rs. ${salaryData.perDaySalary}`, 300, rowY, { width: 90, align: 'center' });
 
-  doc.fillColor(darkTextColor).font('Helvetica');
-  rowY += 20;
-  doc.text("(-) Total Deductions :", col1, rowY).text(`Rs. ${salaryData.totalDeductions}   /=`, col1 + 170, rowY);
+  doc.fillColor(darkTextColor).font('Helvetica').fontSize(7.5);
+  rowY += 15;
+  doc.text("(-) Total Deductions :", col1, rowY).text(`Rs. ${salaryData.totalDeductions}   /=`, col1 + 120, rowY);
   
-  rowY += 20;
-  doc.font('Helvetica-Bold').text("Gross Salary :", col1, rowY).font('Helvetica').text(`Rs. ${salaryData.grossPay}   /=`, col1 + 170, rowY);
+  rowY += 15;
+  doc.font('Helvetica-Bold').text("Gross Salary :", col1, rowY).font('Helvetica').text(`Rs. ${salaryData.grossPay}   /=`, col1 + 120, rowY);
   
-  rowY += 20;
-  doc.text("(+) Total Allowances :", col1, rowY).text(`Rs. ${salaryData.totalAllowance}   /=`, col1 + 170, rowY);
+  rowY += 15;
+  doc.text("(+) Total Allowances :", col1, rowY).text(`Rs. ${salaryData.totalAllowance}   /=`, col1 + 120, rowY);
   
-  rowY += 20;
+  rowY += 15;
   const jjSalary = (salaryData.juneSalary || 0) + (salaryData.julySalary || 0);
-  doc.text("(+) June / July Salary :", col1, rowY).text(`Rs. ${jjSalary > 0 ? jjSalary : '0'}   /=`, col1 + 170, rowY);
-  
+  doc.text("(+) June / July Salary :", col1, rowY).text(`Rs. ${jjSalary > 0 ? jjSalary : '0'}   /=`, col1 + 120, rowY);
   // Highlight payable amount banner
-  rowY += 20;
-  doc.roundedRect(col1 - 5, rowY - 5, 515, 26, 4).fill(primaryColor);
-  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(11).text("Net Payable Salary Amount :", col1, rowY);
-  doc.text(`Rs. ${salaryData.payableSalary}   /=`, 400, rowY, { align: 'right', width: 130 });
+  rowY += 15;
+  doc.roundedRect(col1 - 3, rowY - 3, 360, 18, 3).fill(primaryColor);
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8.5).text("Net Payable Salary Amount :", col1, rowY);
+  doc.text(`Rs. ${salaryData.payableSalary}   /=`, 270, rowY, { align: 'right', width: 90 });
 
-  // Amount in words box
-  cy += 190;
-  doc.roundedRect(25, cy, 545, 25, 4).fill(lightBg);
-  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(9.5).text("Salary Amount in words :", 35, cy + 8);
-  doc.fillColor(darkTextColor).font('Helvetica-BoldOblique').text(`Rupees ${numberToWords(salaryData.payableSalary)}`, 175, cy + 8);
+  // Principal Signature — fixed at bottom of A5
+  if (fs.existsSync(signaturePath)) {
+    doc.image(signaturePath, 305, 515, { width: 55 }); 
+  }
+  doc.fillColor(mutedTextColor).font('Helvetica').fontSize(7);
+  doc.moveTo(270, 545).lineTo(370, 545).lineWidth(0.5).strokeColor(mutedTextColor).stroke();
+  doc.text("Principal Signature", 290, 550);
 
-  // Signatures
-  cy += 70;
-  doc.fillColor(mutedTextColor).font('Helvetica').fontSize(9.5);
-  doc.moveTo(50, cy).lineTo(200, cy).lineWidth(0.5).strokeColor(mutedTextColor).stroke();
-  doc.text("Admin Signature", 75, cy + 6);
+  // Footer notes — fixed at very bottom
+  doc.fontSize(6).fillColor('#94a3b8');
+  doc.text("Generated via Sir Solomon's School Management System", 20, 565, { align: 'center', width: 380 });
+  doc.font('Helvetica-Bold').text(professionalNote, 20, 575, { align: 'center', width: 380 });
   
-  doc.moveTo(390, cy).lineTo(540, cy).stroke();
-  doc.text("Teacher Signature", 420, cy + 6);
-
-  // Footer seal / timestamp
-  doc.fontSize(8).fillColor('#94a3b8');
-  doc.text("Generated via Sir Solomon's School Management System", 30, 785, { align: 'center' });
+  // Outer border
+  doc.rect(15, 15, 390, 580).lineWidth(1.5).strokeColor(primaryColor).stroke();
 
   doc.end();
 };
+
 export const generateReportCardPDF = (studentData, results, res) => {
-  const doc = new PDFDocument({ margin: 50 });
+  const doc = new PDFDocument({ size: 'A5', margins: { top: 20, bottom: -1000, left: 20, right: 20 } });
+  
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=report-card-${studentData.rollNumber}.pdf`);
   doc.pipe(res);
 
   buildHeader(doc, 'Student Report Card');
 
+  let currentY = 100;
   // Student Details
   doc
-    .fontSize(12)
-    .text(`Name: ${studentData.fullName}`)
-    .text(`Roll Number: ${studentData.rollNumber}`)
-    .text(`Class: ${studentData.class?.className || 'N/A'} - ${studentData.section || ''}`)
-    .moveDown();
+    .font('Helvetica')
+    .fontSize(9)
+    .text(`Name: ${studentData.fullName}`, 20, currentY)
+    .text(`Roll Number: ${studentData.rollNumber}`, 20, currentY + 15)
+    .text(`Class: ${studentData.class?.className || 'N/A'} - ${studentData.section || ''}`, 20, currentY + 30);
 
-  // Results Table
-  let currentY = doc.y;
+  currentY += 55;
   
   // Table Header
-  doc.font('Helvetica-Bold');
-  doc.text('Subject', 50, currentY);
-  doc.text('Total Marks', 200, currentY);
-  doc.text('Obtained', 300, currentY);
-  doc.text('%', 400, currentY);
-  doc.text('Grade', 470, currentY);
+  doc.font('Helvetica-Bold').fontSize(8);
+  doc.text('Subject', 30, currentY);
+  doc.text('Total Marks', 150, currentY);
+  doc.text('Obtained', 230, currentY);
+  doc.text('%', 300, currentY);
+  doc.text('Grade', 350, currentY);
   
-  currentY += 20;
+  currentY += 15;
   doc.font('Helvetica');
 
   let grandTotal = 0;
   let totalObtained = 0;
 
   results.forEach(result => {
-    doc.text(result.exam?.subject?.name || 'Unknown', 50, currentY);
-    doc.text(result.totalMarks.toString(), 200, currentY);
-    doc.text(result.marksObtained.toString(), 300, currentY);
-    doc.text(result.percentage?.toFixed(2) || '0.00', 400, currentY);
-    doc.text(result.grade || 'N/A', 470, currentY);
+    doc.text(result.exam?.subject?.name || 'Unknown', 30, currentY);
+    doc.text(result.totalMarks.toString(), 150, currentY);
+    doc.text(result.marksObtained.toString(), 230, currentY);
+    doc.text(result.percentage?.toFixed(2) || '0.00', 300, currentY);
+    doc.text(result.grade || 'N/A', 350, currentY);
     
     grandTotal += result.totalMarks;
     totalObtained += result.marksObtained;
-    currentY += 20;
+    currentY += 15;
   });
 
-  currentY += 20;
+  currentY += 10;
   const overallPercentage = grandTotal > 0 ? (totalObtained / grandTotal) * 100 : 0;
   
   doc.font('Helvetica-Bold');
-  doc.text('Overall Performance:', 50, currentY);
-  currentY += 20;
+  doc.text('Overall Performance:', 30, currentY);
+  currentY += 15;
   doc.font('Helvetica');
-  doc.text(`Total Marks: ${totalObtained} / ${grandTotal}`, 50, currentY);
-  currentY += 20;
-  doc.text(`Percentage: ${overallPercentage.toFixed(2)}%`, 50, currentY);
+  doc.text(`Total Marks: ${totalObtained} / ${grandTotal}`, 30, currentY);
+  currentY += 15;
+  doc.text(`Percentage: ${overallPercentage.toFixed(2)}%`, 30, currentY);
+
+  // Signatures directly below content
+  currentY += 45;
+  doc.moveTo(280, currentY).lineTo(380, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
+  doc.fontSize(8).fillColor('#000000').text("Principal Signature", 300, currentY + 4);
+  if (fs.existsSync(signaturePath)) {
+    doc.image(signaturePath, 300, currentY - 35, { width: 55 });
+  }
+
+  // Footer note directly below signature
+  doc.fontSize(6).fillColor('#94a3b8');
+  doc.text("Generated via Sir Solomon's School Management System", 20, currentY + 25, { align: 'center', width: 380 });
+  doc.font('Helvetica-Bold').text(professionalNote, 20, currentY + 35, { align: 'center', width: 380 });
+  
+  // Outer border matching dynamic height
+  doc.rect(15, 15, 390, currentY + 45).lineWidth(1.5).strokeColor('#3b82f6').stroke();
 
   doc.end();
 };
 
 export const generateFeeReceiptPDF = (feeData, res) => {
-  const doc = new PDFDocument({ margin: 50, size: 'A5' });
+  const doc = new PDFDocument({ size: 'A5', margins: { top: 20, bottom: -1000, left: 20, right: 20 } });
+  
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=fee-receipt-${feeData.receiptNumber}.pdf`);
   doc.pipe(res);
 
   buildHeader(doc, 'Fee Receipt', `Receipt #: ${feeData.receiptNumber}`);
 
+  let currentY = 100;
   doc
-    .fontSize(12)
-    .text(`Date: ${feeData.paidDate ? new Date(feeData.paidDate).toLocaleDateString() : new Date().toLocaleDateString()}`)
-    .text(`Student: ${feeData.student.fullName}`)
-    .text(`Roll Number: ${feeData.student.rollNumber}`)
-    .text(`Class: ${feeData.class?.className || 'N/A'}`)
-    .text(`Fee For: ${getMonthName(feeData.month)} ${feeData.year}`)
-    .moveDown();
+    .font('Helvetica')
+    .fontSize(9)
+    .text(`Date: ${feeData.paidDate ? new Date(feeData.paidDate).toLocaleDateString() : new Date().toLocaleDateString()}`, 20, currentY)
+    .text(`Student: ${feeData.student.fullName}`, 20, currentY + 15)
+    .text(`Roll Number: ${feeData.student.rollNumber}`, 20, currentY + 30)
+    .text(`Class: ${feeData.class?.className || 'N/A'}`, 20, currentY + 45)
+    .text(`Fee For: ${getMonthName(feeData.month)} ${feeData.year}`, 20, currentY + 60);
 
-  const currentY = doc.y;
+  currentY += 90;
   
   const drawRow = (y, label, value, isBold = false) => {
     if (isBold) doc.font('Helvetica-Bold');
     else doc.font('Helvetica');
-    doc.text(label, 50, y).text(value.toString(), 300, y, { width: 80, align: 'right' });
+    doc.text(label, 30, y).text(value.toString(), 220, y, { width: 80, align: 'right' });
   };
 
   drawRow(currentY, 'Base Amount', feeData.amount);
-  drawRow(currentY + 20, 'Discount', `-${feeData.discount}`);
-  drawRow(currentY + 40, 'Scholarship', `-${feeData.scholarship}`);
+  drawRow(currentY + 15, 'Discount', `-${feeData.discount}`);
+  drawRow(currentY + 30, 'Scholarship', `-${feeData.scholarship}`);
   
-  doc.rect(50, currentY + 65, 330, 30).fill('#e0f2fe');
+  doc.rect(30, currentY + 50, 270, 22).fill('#e0f2fe');
   doc.fillColor('#1e3a8a');
-  drawRow(currentY + 75, 'NET PAID', feeData.netAmount, true);
+  drawRow(currentY + 57, 'NET PAID', feeData.netAmount, true);
+
+  const finalY = currentY + 100;
+  doc.moveTo(280, finalY).lineTo(380, finalY).lineWidth(0.5).strokeColor('#000000').stroke();
+  doc.fontSize(8).fillColor('#000000').text("Principal Signature", 300, finalY + 4);
+  if (fs.existsSync(signaturePath)) {
+    doc.image(signaturePath, 300, finalY - 35, { width: 55 });
+  }
+
+  // Footer note
+  doc.fontSize(6).fillColor('#94a3b8');
+  doc.text("Generated via Sir Solomon's School Management System", 20, finalY + 25, { align: 'center', width: 380 });
+  doc.font('Helvetica-Bold').text(professionalNote, 20, finalY + 35, { align: 'center', width: 380 });
+  
+  // Outer border matching dynamic height
+  doc.rect(15, 15, 390, finalY + 45).lineWidth(1.5).strokeColor('#8b5cf6').stroke();
 
   doc.end();
 };

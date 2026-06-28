@@ -87,8 +87,8 @@ export default function Login() {
       </button>
 
       <div className="text-center mb-8">
-        <div className="w-16 h-16 bg-gradient-to-tr from-primary-600 to-primary-400 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-primary-500/40 mb-4 animate-bounce-slow">
-          <span className="text-3xl font-bold text-white font-display">S</span>
+        <div className="w-16 h-16 bg-gradient-to-tr from-primary-600 to-primary-400 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-primary-500/40 mb-4 animate-bounce-slow overflow-hidden bg-white">
+          <img src="/logo.png" alt="School Logo" className="w-full h-full object-contain p-1" />
         </div>
         <h2 className="text-3xl font-bold text-slate-800 dark:text-white font-display mb-2">Sir Solomon's</h2>
         <p className="text-slate-500 dark:text-slate-400">Welcome back! Please login to your account.</p>

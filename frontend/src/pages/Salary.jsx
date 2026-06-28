@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { FiDollarSign, FiDownload, FiFileText, FiCheckSquare, FiSquare, FiUser, FiFilter, FiZap, FiTrash2, FiPlus, FiMinus } from 'react-icons/fi';
 import { FaWhatsapp } from 'react-icons/fa';
-import { showSuccess, showError } from '../utils/alerts';
+import { showSuccess, showError, confirmDelete } from '../utils/alerts';
 import { formatCurrency } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -208,7 +208,8 @@ export default function Salary() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this salary record? This will allow you to recalculate it.')) return;
+    const confirmed = await confirmDelete('this salary record');
+    if (!confirmed) return;
     try {
       await api.delete(`/salary/${id}`);
       showSuccess('Salary record deleted');
@@ -255,16 +256,26 @@ export default function Salary() {
   };
 
   const sendWhatsApp = (row) => {
+    // Open WhatsApp immediately (avoids popup blockers)
     const t = row.teacher;
-    const phone = t?.phone?.replace(/[^0-9]/g, '') || '';
+    let phone = t?.phone?.replace(/[^0-9]/g, '') || '';
+    if (phone.startsWith('03') && phone.length === 11) {
+      phone = '92' + phone.substring(1);
+    }
     const msg = encodeURIComponent(
       `Hello ${t?.fullName},\n\nYour salary for *${monthNames[formData.month - 1]} ${formData.year}*:\n\n` +
       `💰 Gross Pay: PKR ${row.grossPay?.toLocaleString()}\n` +
       `✅ Allowances: PKR ${row.totalAllowance?.toLocaleString()}\n` +
       `➕ Additions: PKR ${row.totalAdditions?.toLocaleString()}\n` +
-      `✅ *Final Payable: PKR ${row.payableSalary?.toLocaleString()}*\n\nRegards, Sir Solomon's`
+      `✅ *Final Payable: PKR ${row.payableSalary?.toLocaleString()}*\n\nPlease find your detailed salary slip attached.\n\nRegards, Sir Solomon's`
     );
-    window.open(phone ? `https://api.whatsapp.com/send?phone=${phone}&text=${msg}` : `https://api.whatsapp.com/send?text=${msg}`, '_blank');
+    // Use wa.me for more direct opening
+    window.open(phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`, '_blank');
+
+    // Trigger download in current window after a short delay so it doesn't interrupt the new tab
+    setTimeout(() => {
+      window.location.href = `http://localhost:5001/api/salary/${row._id}/slip`;
+    }, 1000);
   };
 
   const downloadSlip = (id) => {
@@ -346,7 +357,7 @@ export default function Salary() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Teachers</label>
                   <span className="text-[10px] bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-400 px-1.5 py-0.5 rounded-full font-bold">

@@ -22,6 +22,7 @@ import Salary from './pages/Salary';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
+import Guide from './pages/Guide';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +56,7 @@ function App() {
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/guide" element={<Guide />} />
                 
               </Route>
 

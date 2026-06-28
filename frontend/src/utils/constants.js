@@ -11,7 +11,8 @@ export const NAV_ITEMS = {
     { title: 'Salary', path: '/salary', icon: 'HiOutlineCurrencyDollar' },
 
     { title: 'Reports', path: '/reports', icon: 'HiOutlineChartBar' },
-    { title: 'Settings', path: '/settings', icon: 'HiOutlineCog' }
+    { title: 'Settings', path: '/settings', icon: 'HiOutlineCog' },
+    { title: 'Guide', path: '/guide', icon: 'HiOutlineBookOpen' }
   ],
   teacher: [
     { title: 'Dashboard', path: '/dashboard', icon: 'HiOutlineHome' },

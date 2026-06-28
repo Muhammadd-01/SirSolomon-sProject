@@ -25,8 +25,8 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, toggleCollapse
         {/* Logo Area */}
         <div className={`flex items-center ${isCollapsed ? 'justify-center mb-8 mt-2' : 'justify-between mb-8 px-2'}`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 flex-shrink-0 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-primary-500/30 text-white font-bold text-xl">
-              S
+            <div className="w-10 h-10 flex-shrink-0 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-primary-500/30 text-white font-bold text-xl overflow-hidden bg-white">
+              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain p-1" />
             </div>
             {!isCollapsed && (
               <span className="self-center text-xl font-bold whitespace-nowrap dark:text-white font-display">
@@ -107,7 +107,7 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, toggleCollapse
               </div>
             </a>
           ) : (
-            <a href="https://nexovate-digital.vercel.app/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-dark-800/30 border border-slate-200 dark:border-white/5 opacity-70 hover:opacity-100 transition-opacity group block">
+            <a href="https://nexovate-digital.vercel.app/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity group block w-full px-2">
               <div className="w-6 h-6 flex-shrink-0 rounded-md bg-gradient-to-br from-slate-800 to-slate-900 dark:from-white dark:to-slate-200 flex items-center justify-center text-white dark:text-dark-900 font-bold text-[10px] shadow-sm group-hover:shadow-md transition-shadow overflow-hidden">
                 <img src="/nexovate-logo.png" alt="ND" className="w-full h-full object-cover" />
               </div>

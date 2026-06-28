@@ -15,8 +15,8 @@ export default function LoadingScreen({ text = 'Loading...' }) {
           scale: { duration: 1.5, repeat: Infinity, ease: "easeInOut" }
         }}
       >
-        <div className="w-full h-full bg-white dark:bg-dark-900 rounded-[14px] flex items-center justify-center">
-          <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-500 to-emerald-500 font-display">S</span>
+        <div className="w-full h-full bg-white dark:bg-dark-900 rounded-[14px] flex items-center justify-center overflow-hidden bg-white">
+          <img src="/logo.png" alt="School Logo" className="w-full h-full object-contain p-1" />
         </div>
       </motion.div>
       <h2 className="text-xl font-display font-bold text-slate-800 dark:text-white mb-2 tracking-wide">
