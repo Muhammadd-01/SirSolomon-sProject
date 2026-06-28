@@ -110,15 +110,15 @@ export const generateSalarySlipPDF = (salaryData, res) => {
     doc.restore();
   }
 
-  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(16);
-  doc.text("Sir Solomon's Secondary School", 20, 30, { align: 'center', width: 380 });
+  doc.fillColor(secondaryColor).font('Helvetica-Bold').fontSize(11.5);
+  doc.text("Sir Solomon's Higher Secondary School & College", 75, 30, { align: 'center', width: 315 });
   
   doc.fillColor(mutedTextColor).font('Helvetica-Oblique').fontSize(8);
-  doc.text("(Regd. & Recog.)", 20, 48, { align: 'center', width: 380 });
+  doc.text("(Regd. & Recog.)", 75, 48, { align: 'center', width: 315 });
   
   doc.fillColor(darkTextColor).font('Helvetica').fontSize(7);
-  doc.text("House # R-45, R-202, R-203, R-204, Sector 31/B, K.D.A Employee's Korangi", 20, 60, { align: 'center', width: 380 });
-  doc.font('Helvetica-Bold').text("Cell # 0333-2310974 , 0333-2255877", 20, 70, { align: 'center', width: 380 });
+  doc.text("House # R-45, R-202, R-203, R-204, Sector 31/B, K.D.A Employee's Korangi", 75, 60, { align: 'center', width: 315 });
+  doc.font('Helvetica-Bold').text("Cell # 0333-2310974 , 0333-2255877", 75, 70, { align: 'center', width: 315 });
 
   // Salary Slip Title Badge
   doc.roundedRect(150, 85, 120, 18, 3).fill(primaryColor);
