@@ -1,9 +1,17 @@
 import Salary from '../models/Salary.js';
 import Teacher from '../models/Teacher.js';
 import Settings from '../models/Settings.js';
-import { generateSalarySlipPDF } from '../utils/generatePDF.js';
+import { generateSalarySlipPDF, generateBulkSalarySlipsPDF } from '../utils/generatePDF.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import * as XLSX from 'xlsx';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { calculateSalary } from '../utils/calculateSalary.js';
 import Attendance from '../models/Attendance.js';
+import MonthlyAttendance from '../models/MonthlyAttendance.js';
 import { SALARY_STATUS } from '../config/constants.js';
 
 // Helper: fetch settings and build custom components list
@@ -63,6 +71,18 @@ export const generateSalary = async (req, res, next) => {
       if (record.status === 'late') lateCount++;
       if (record.status === 'present') presentCount++;
     });
+
+    const monthlySummary = await MonthlyAttendance.findOne({
+      user: teacher.user._id,
+      month,
+      year
+    });
+
+    if (monthlySummary) {
+      absentCount += monthlySummary.absentCount;
+      absentCount += monthlySummary.halfDayCount * 0.5;
+      lateCount += monthlySummary.lateCount;
+    }
 
     // Check if teacher qualifies for June/July salary (12+ months of service)
     const oneYearAgo = new Date();
@@ -156,6 +176,18 @@ export const previewSalary = async (req, res, next) => {
       if (record.status === 'late') lateCount++;
       if (record.status === 'present') presentCount++;
     });
+
+    const monthlySummary = await MonthlyAttendance.findOne({
+      user: teacher.user._id,
+      month,
+      year
+    });
+
+    if (monthlySummary) {
+      absentCount += monthlySummary.absentCount;
+      absentCount += monthlySummary.halfDayCount * 0.5;
+      lateCount += monthlySummary.lateCount;
+    }
 
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -268,6 +300,104 @@ export const deleteSalary = async (req, res, next) => {
 
     await salary.deleteOne();
     res.status(200).json({ success: true, message: 'Salary record deleted successfully for recalculation' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const bulkDeleteSalaries = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'No salary IDs provided' });
+    }
+
+    // Filter out PAID salaries
+    const salaries = await Salary.find({ _id: { $in: ids } });
+    const deletableIds = salaries.filter(s => s.status !== SALARY_STATUS.PAID).map(s => s._id);
+
+    if (deletableIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'All selected salaries are already PAID and cannot be deleted' });
+    }
+
+    await Salary.deleteMany({ _id: { $in: deletableIds } });
+    res.status(200).json({ 
+      success: true, 
+      message: `${deletableIds.length} salary record(s) deleted. ${ids.length - deletableIds.length > 0 ? (ids.length - deletableIds.length) + ' were PAID and skipped.' : ''}` 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const downloadBulkSalarySlips = async (req, res, next) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ success: false, message: 'Month and year are required' });
+
+    const salaries = await Salary.find({ month, year }).populate({
+      path: 'teacher',
+      populate: { path: 'user' }
+    });
+
+    if (!salaries || salaries.length === 0) {
+      return res.status(404).json({ success: false, message: 'No salaries found for this month' });
+    }
+
+    generateBulkSalarySlipsPDF(salaries, res, month, year);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const downloadBulkSalaryExcel = async (req, res, next) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ success: false, message: 'Month and year are required' });
+
+    const salaries = await Salary.find({ month, year }).populate({
+      path: 'teacher',
+      populate: { path: 'user' }
+    });
+
+    if (!salaries || salaries.length === 0) {
+      return res.status(404).json({ success: false, message: 'No salaries found for this month' });
+    }
+
+    const exportData = salaries.map(salary => {
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      return {
+        "Teacher ID": salary.teacher?.teacherId || 'N/A',
+        "Name": salary.teacher?.fullName || 'N/A',
+        "Month": `${monthNames[salary.month - 1]} ${salary.year}`,
+        "Basic Salary": salary.basicSalary,
+        "Total Allowances": salary.totalAllowance,
+        "Total Deductions": salary.totalDeductions,
+        "June/July Salary": (salary.juneSalary || 0) + (salary.julySalary || 0),
+        "Bonus": salary.bonus || 0,
+        "Net Payable": salary.payableSalary,
+        "Status": salary.status
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Salaries");
+
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const monthName = monthNames[month - 1] || month;
+    const fileName = `Salaries-${monthName}-${year}.xlsx`;
+
+    const rootDir = path.join(__dirname, '../../');
+    const excelDir = path.join(rootDir, 'Excel_Reports', `${monthName}_${year}`);
+    if (!fs.existsSync(excelDir)) {
+      fs.mkdirSync(excelDir, { recursive: true });
+    }
+    const filePath = path.join(excelDir, fileName);
+
+    XLSX.writeFile(wb, filePath); // Save to disk
+
+    res.download(filePath, fileName);
   } catch (error) {
     next(error);
   }

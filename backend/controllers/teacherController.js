@@ -13,6 +13,7 @@ export const getTeachers = async (req, res, next) => {
         { fullName: { $regex: search, $options: 'i' } },
         { cnic: { $regex: search, $options: 'i' } },
         { phone: { $regex: search, $options: 'i' } },
+        { teacherId: { $regex: search, $options: 'i' } },
       ];
     }
     if (department) query.department = department;
@@ -38,7 +39,22 @@ export const getTeacher = async (req, res, next) => {
 
 export const createTeacher = async (req, res, next) => {
   try {
-    const { email, teacherId, fullName, phone, basicSalary, ...teacherData } = req.body;
+    const { email, teacherId: providedTeacherId, fullName, phone, basicSalary, ...teacherData } = req.body;
+    
+    let teacherId = providedTeacherId;
+    if (!teacherId) {
+      const lastTeacher = await Teacher.findOne().sort({ createdAt: -1 });
+      let nextIdNum = 1;
+      if (lastTeacher && lastTeacher.teacherId) {
+          const match = lastTeacher.teacherId.match(/\d+$/);
+          if (match) {
+              nextIdNum = parseInt(match[0], 10) + 1;
+          } else {
+              nextIdNum = await Teacher.countDocuments() + 1;
+          }
+      }
+      teacherId = `TCH-${String(nextIdNum).padStart(3, '0')}`;
+    }
 
     // Handle profile image if uploaded
     let profileImage = '';
@@ -136,6 +152,41 @@ export const deleteTeacher = async (req, res, next) => {
     await User.findByIdAndUpdate(teacher.user, { isActive: false });
 
     res.status(200).json({ success: true, message: 'Teacher marked as Left' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const bulkDeleteTeachers = async (req, res, next) => {
+  try {
+    const { ids, hard } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'No teacher IDs provided' });
+    }
+
+    const teachers = await Teacher.find({ _id: { $in: ids } });
+    if (teachers.length === 0) {
+      return res.status(404).json({ success: false, message: 'No teachers found' });
+    }
+
+    if (hard) {
+      const userIds = teachers.map(t => t.user);
+      const teacherIds = teachers.map(t => t._id);
+      await Salary.deleteMany({ teacher: { $in: teacherIds } });
+      await User.deleteMany({ _id: { $in: userIds } });
+      await Teacher.deleteMany({ _id: { $in: teacherIds } });
+      return res.status(200).json({ success: true, message: `${teachers.length} teacher(s) permanently deleted` });
+    }
+
+    // Soft delete
+    await Teacher.updateMany(
+      { _id: { $in: ids } },
+      { $set: { status: 'Left', dateOfLeaving: new Date() } }
+    );
+    const userIds = teachers.map(t => t.user);
+    await User.updateMany({ _id: { $in: userIds } }, { $set: { isActive: false } });
+
+    res.status(200).json({ success: true, message: `${teachers.length} teacher(s) marked as Left` });
   } catch (error) {
     next(error);
   }

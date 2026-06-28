@@ -3,7 +3,7 @@ import api from '../services/api';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiPhone, FiMail, FiBookOpen, FiUploadCloud, FiUser } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiPhone, FiMail, FiBookOpen, FiUploadCloud, FiUser, FiCheckSquare, FiSquare } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { confirmDelete, showSuccess } from '../utils/alerts';
 import { formatCurrency, formatDate } from '../utils/formatters';
@@ -20,6 +20,7 @@ export default function Teachers() {
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -115,6 +116,32 @@ export default function Teachers() {
       } catch (error) {
         toast.error('Failed to update teacher');
       }
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedTeacherIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedTeacherIds.length === teachers.length) {
+      setSelectedTeacherIds([]);
+    } else {
+      setSelectedTeacherIds(teachers.map(t => t._id));
+    }
+  };
+
+  const handleBulkDelete = async (hard = false) => {
+    const label = hard ? 'PERMANENTLY DELETE' : 'mark as Left';
+    const isConfirmed = await confirmDelete(`${selectedTeacherIds.length} teacher(s) — ${label}`);
+    if (!isConfirmed) return;
+    try {
+      await api.post('/teachers/bulk-delete', { ids: selectedTeacherIds, hard });
+      showSuccess(`${selectedTeacherIds.length} teacher(s) ${hard ? 'permanently deleted' : 'marked as Left'}`);
+      setSelectedTeacherIds([]);
+      fetchTeachers();
+    } catch (error) {
+      toast.error('Failed to bulk delete teachers');
     }
   };
 
@@ -217,9 +244,22 @@ export default function Teachers() {
             <option value="Suspended">Suspended</option>
             <option value="Left">Left</option>
           </select>
+          <Button variant="secondary" leftIcon={<FiCheckSquare />} onClick={toggleSelectAll}>Select All</Button>
           <Button leftIcon={<FiPlus />} onClick={openNewModal}>Add Teacher</Button>
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedTeacherIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-xl px-4 py-3">
+          <span className="text-sm font-bold text-primary-700 dark:text-primary-300">{selectedTeacherIds.length} teacher(s) selected</span>
+          <div className="flex gap-2 ml-auto">
+            <Button size="sm" variant="secondary" onClick={() => setSelectedTeacherIds([])}>Deselect All</Button>
+            <Button size="sm" variant="danger" leftIcon={<FiTrash2 />} onClick={() => handleBulkDelete(false)}>Mark as Left</Button>
+            <button onClick={() => handleBulkDelete(true)} className="px-3 py-1.5 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors text-sm font-semibold">Permanent Delete</button>
+          </div>
+        </div>
+      )}
 
       {/* Cards Grid */}
       {isLoading ? (
@@ -236,8 +276,15 @@ export default function Teachers() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {teachers.map(teacher => (
-            <div key={teacher._id} className="glass-card hover:shadow-xl transition-all duration-300 group overflow-hidden flex flex-col relative border border-slate-200 dark:border-white/10 rounded-2xl bg-white/80 dark:bg-dark-800/80">
+          {teachers.map(teacher => {
+            const isSelected = selectedTeacherIds.includes(teacher._id);
+            return (
+            <div key={teacher._id} className={`glass-card hover:shadow-xl transition-all duration-300 group overflow-hidden flex flex-col relative border rounded-2xl bg-white/80 dark:bg-dark-800/80 ${isSelected ? 'border-primary-500 ring-2 ring-primary-500/30' : 'border-slate-200 dark:border-white/10'}`}>
+              
+              {/* Select Checkbox */}
+              <button onClick={() => toggleSelect(teacher._id)} className="absolute top-4 left-4 z-10 text-lg">
+                {isSelected ? <FiCheckSquare className="text-primary-500" /> : <FiSquare className="text-slate-300 dark:text-slate-600 group-hover:text-slate-400" />}
+              </button>
               
               {/* Status Badge */}
               <div className="absolute top-4 right-4 z-10">
@@ -296,7 +343,8 @@ export default function Teachers() {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -333,7 +381,9 @@ export default function Teachers() {
             <Input label="Cell #" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
             <Input label="Email" type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
             
-            <Input label="Teacher ID" required value={formData.teacherId} onChange={e => setFormData({...formData, teacherId: e.target.value})} />
+            {editingTeacher && (
+              <Input label="Teacher ID" disabled required value={formData.teacherId} onChange={e => setFormData({...formData, teacherId: e.target.value})} />
+            )}
             
             <Input 
               label="CNIC Number" 

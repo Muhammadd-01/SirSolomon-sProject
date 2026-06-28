@@ -24,7 +24,7 @@ export default function Attendance() {
   const [isLoading, setIsLoading] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isDailySaving, setIsDailySaving] = useState(false);
-  const [mode, setMode] = useState('daily'); // 'daily' or 'bulk'
+  const [mode, setMode] = useState('daily'); // 'daily', 'bulk', or 'monthly'
   const [editingUserId, setEditingUserId] = useState(null);
   const [pendingDailyChanges, setPendingDailyChanges] = useState({}); // { userId: status }
 
@@ -41,8 +41,13 @@ export default function Attendance() {
     excludeSundays: true,
     defaultSignInTime: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })
   });
-  const [selectedUsers, setSelectedUsers] = useState([]);
   const [gridData, setGridData] = useState({}); // { "userId_dateStr": "status" }
+
+  // Monthly Summary State
+  const [summaryMonth, setSummaryMonth] = useState(new Date().getMonth() + 1);
+  const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
+  const [monthlySummaryData, setMonthlySummaryData] = useState({}); // { userId: { absentCount: 0, lateCount: 0, halfDayCount: 0 } }
+  const [selectedUsers, setSelectedUsers] = useState([]);
 
   // History Modal State
   const [selectedHistoryUser, setSelectedHistoryUser] = useState(null);
@@ -92,13 +97,16 @@ export default function Attendance() {
   useEffect(() => { fetchHistory(); }, [selectedHistoryUser, historyMonth, historyYear]);
 
   useEffect(() => {
-    if (mode === 'bulk') {
+    if (mode === 'bulk' || mode === 'monthly') {
       setSelectedUsers(users.map(u => {
         const id = typeof u.user === 'object' ? u.user?._id : u.user;
         return id || u._id;
       }));
     }
-  }, [mode, users]);
+    if (mode === 'monthly') {
+      fetchMonthlySummary();
+    }
+  }, [mode, users, summaryMonth, summaryYear]);
 
   // Fetch existing attendance records for the bulk date range and pre-populate gridData
   const fetchBulkExisting = async () => {
@@ -126,6 +134,19 @@ export default function Attendance() {
   useEffect(() => {
     fetchBulkExisting();
   }, [mode, bulkData.startDate, bulkData.endDate, users]);
+
+  const fetchMonthlySummary = async () => {
+    try {
+      const res = await api.get(`/attendance/monthly-summary?month=${summaryMonth}&year=${summaryYear}`);
+      const newData = {};
+      res.data.data.forEach(s => {
+        newData[s.user] = { absentCount: s.absentCount, lateCount: s.lateCount, halfDayCount: s.halfDayCount };
+      });
+      setMonthlySummaryData(newData);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const markStatus = (userId, status) => {
     setPendingDailyChanges(prev => ({
@@ -163,6 +184,45 @@ export default function Attendance() {
     }
   };
 
+  const handleSummaryChange = (userId, field, value) => {
+    setMonthlySummaryData(prev => ({
+      ...prev,
+      [userId]: {
+        ...(prev[userId] || { absentCount: '', lateCount: '', halfDayCount: '' }),
+        [field]: value === '' ? '' : Math.max(0, Number(value))
+      }
+    }));
+  };
+
+  const handleBulkSubmit = async () => {
+    if (selectedUsers.length === 0) {
+      showError('Please select at least one user');
+      return;
+    }
+
+    const payload = selectedUsers.map(userId => ({
+      user: userId,
+      absentCount: monthlySummaryData[userId]?.absentCount || 0,
+      lateCount: monthlySummaryData[userId]?.lateCount || 0,
+      halfDayCount: monthlySummaryData[userId]?.halfDayCount || 0
+    }));
+
+    try {
+      setIsBulkLoading(true);
+      await api.post('/attendance/monthly-summary', {
+        month: summaryMonth,
+        year: summaryYear,
+        summaries: payload
+      });
+      showSuccess(`Successfully saved monthly attendance summaries`);
+      fetchMonthlySummary();
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to save monthly summary');
+    } finally {
+      setIsBulkLoading(false);
+    }
+  };
+
   const dateRange = useMemo(() => {
     const dates = [];
     let current = new Date(bulkData.startDate);
@@ -196,7 +256,7 @@ export default function Attendance() {
     setGridData(newData);
   };
 
-  const handleBulkSubmit = async () => {
+  const handleCalendarBulkSubmit = async () => {
     if (selectedUsers.length === 0) {
       showError('Please select at least one user');
       return;
@@ -333,11 +393,12 @@ export default function Attendance() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-800 dark:text-white font-display">Attendance Manager</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Mark daily records or apply weekly/monthly bulk attendance</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Mark daily records, bulk calendar grid, or input monthly attendance summaries</p>
         </div>
-        <div className="bg-slate-200 dark:bg-dark-800 p-1 rounded-xl flex gap-1">
+        <div className="bg-slate-200 dark:bg-dark-800 p-1 rounded-xl flex flex-wrap gap-1">
           <button className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'daily' ? 'bg-white dark:bg-dark-700 text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} onClick={() => setMode('daily')}><FiCalIcon /> Daily Entry</button>
-          <button className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'bulk' ? 'bg-white dark:bg-dark-700 text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} onClick={() => setMode('bulk')}><FiLayers /> Bulk Calendar Grid</button>
+          <button className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'bulk' ? 'bg-white dark:bg-dark-700 text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} onClick={() => setMode('bulk')}><FiLayers /> Bulk Calendar</button>
+          <button className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'monthly' ? 'bg-white dark:bg-dark-700 text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} onClick={() => setMode('monthly')}><FiCalendar /> Monthly Summary</button>
         </div>
       </div>
 
@@ -385,7 +446,7 @@ export default function Attendance() {
               </CardBody>
             </Card>
           </motion.div>
-        ) : (
+        ) : mode === 'bulk' ? (
           <motion.div key="bulk" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
             <Card glass className="border-primary-200 dark:border-primary-900/50">
               <CardBody className="p-6">
@@ -470,8 +531,118 @@ export default function Attendance() {
                   <p className="text-sm font-medium text-primary-800 dark:text-primary-300">
                     Click cells to cycle through statuses: Present(P) → Late(L) → Half Day(HD) → Absent(A) → Leave(Lv) → Unmarked(-)
                   </p>
-                  <Button onClick={handleBulkSubmit} isLoading={isBulkLoading} leftIcon={<FiSave />} className="px-8 shadow-lg shadow-primary-500/30">
+                  <Button onClick={handleCalendarBulkSubmit} isLoading={isBulkLoading} leftIcon={<FiSave />} className="px-8 shadow-lg shadow-primary-500/30">
                     Save Grid Attendance
+                  </Button>
+                </div>
+
+              </CardBody>
+            </Card>
+          </motion.div>
+        ) : (
+          <motion.div key="monthly" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+            <Card glass className="border-primary-200 dark:border-primary-900/50">
+              <CardBody className="p-6">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-5 bg-slate-50 dark:bg-dark-800/50 rounded-2xl border border-slate-100 dark:border-white/5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Month</label>
+                    <select className="input-field" value={summaryMonth} onChange={e => setSummaryMonth(Number(e.target.value))}>
+                      {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                        <option key={i+1} value={i+1}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Year</label>
+                    <Input type="number" value={summaryYear} onChange={e => setSummaryYear(Number(e.target.value))} />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white font-display">Monthly Attendance Summary</h3>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-xl mb-6">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-slate-700 bg-slate-100 dark:bg-dark-800 dark:text-slate-300 border-b border-slate-200 dark:border-white/5">
+                      <tr>
+                        <th className="px-4 py-3 min-w-[200px] sticky left-0 z-10 bg-slate-100 dark:bg-dark-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" className="w-4 h-4 rounded accent-primary-600" checked={selectedUsers.length === users.length && users.length > 0} onChange={e => handleSelectAll(e.target.checked)} />
+                            <span>Select Teacher</span>
+                          </label>
+                        </th>
+                        <th className="px-4 py-3 text-center min-w-[100px] font-semibold text-red-600">Total Absents</th>
+                        <th className="px-4 py-3 text-center min-w-[100px] font-semibold text-amber-600">Total Lates</th>
+                        <th className="px-4 py-3 text-center min-w-[100px] font-semibold text-blue-600">Half Days</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.length === 0 ? (
+                        <tr><td colSpan={4} className="p-8 text-center text-slate-500">No active {role}s found.</td></tr>
+                      ) : (
+                        users.map((user, i) => {
+                          const rawUserId = typeof user.user === 'object' ? user.user?._id : user.user;
+                          const userId = rawUserId || user._id;
+                          const isSelected = selectedUsers.includes(userId);
+                          const summary = monthlySummaryData[userId] || { absentCount: '', lateCount: '', halfDayCount: '' };
+                          
+                          return (
+                            <tr key={userId} className={`border-b last:border-b-0 border-slate-100 dark:border-white/5 ${isSelected ? 'bg-white dark:bg-dark-900' : 'bg-slate-50/50 dark:bg-dark-800/20'} hover:bg-slate-50 dark:hover:bg-dark-800/50 transition-colors`}>
+                              <td className={`px-4 py-3 sticky left-0 z-10 ${isSelected ? 'bg-white dark:bg-dark-900' : 'bg-slate-50/50 dark:bg-dark-800/20'} shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]`}>
+                                <label className="flex items-center gap-2 cursor-pointer w-max">
+                                  <input type="checkbox" className="w-4 h-4 rounded accent-primary-600" checked={isSelected} onChange={e => handleSelectUser(userId, e.target.checked)} />
+                                  <span className={`font-semibold truncate max-w-[150px] ${isSelected ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>{user.fullName || user.name}</span>
+                                </label>
+                              </td>
+                              <td className="px-4 py-2 border-l border-slate-100 dark:border-white/5">
+                                <input 
+                                  type="number" 
+                                  min="0" 
+                                  placeholder="0"
+                                  disabled={!isSelected}
+                                  value={summary.absentCount} 
+                                  onChange={(e) => handleSummaryChange(userId, 'absentCount', e.target.value)}
+                                  className={`w-full px-3 py-1.5 rounded-lg border text-center font-medium ${isSelected ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400 focus:ring-2 focus:ring-red-500/50' : 'border-slate-200 bg-slate-100 text-slate-400 dark:border-white/5 dark:bg-dark-800'}`} 
+                                />
+                              </td>
+                              <td className="px-4 py-2 border-l border-slate-100 dark:border-white/5">
+                                <input 
+                                  type="number" 
+                                  min="0" 
+                                  placeholder="0"
+                                  disabled={!isSelected}
+                                  value={summary.lateCount} 
+                                  onChange={(e) => handleSummaryChange(userId, 'lateCount', e.target.value)}
+                                  className={`w-full px-3 py-1.5 rounded-lg border text-center font-medium ${isSelected ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-500/10 dark:text-amber-400 focus:ring-2 focus:ring-amber-500/50' : 'border-slate-200 bg-slate-100 text-slate-400 dark:border-white/5 dark:bg-dark-800'}`} 
+                                />
+                              </td>
+                              <td className="px-4 py-2 border-l border-slate-100 dark:border-white/5">
+                                <input 
+                                  type="number" 
+                                  min="0" 
+                                  placeholder="0"
+                                  disabled={!isSelected}
+                                  value={summary.halfDayCount} 
+                                  onChange={(e) => handleSummaryChange(userId, 'halfDayCount', e.target.value)}
+                                  className={`w-full px-3 py-1.5 rounded-lg border text-center font-medium ${isSelected ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-500/10 dark:text-blue-400 focus:ring-2 focus:ring-blue-500/50' : 'border-slate-200 bg-slate-100 text-slate-400 dark:border-white/5 dark:bg-dark-800'}`} 
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-between items-center bg-primary-50 dark:bg-primary-900/10 p-4 rounded-xl border border-primary-100 dark:border-primary-900/30">
+                  <p className="text-sm font-medium text-primary-800 dark:text-primary-300">
+                    These numbers will be automatically added to the salary calculation for the selected month.
+                  </p>
+                  <Button onClick={handleBulkSubmit} isLoading={isBulkLoading} leftIcon={<FiSave />} className="px-8 shadow-lg shadow-primary-500/30">
+                    Save Monthly Summary
                   </Button>
                 </div>
 

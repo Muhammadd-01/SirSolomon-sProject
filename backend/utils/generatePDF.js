@@ -78,17 +78,7 @@ function calculateAge(dob) {
   return { years, months, days };
 }
 
-export const generateSalarySlipPDF = (salaryData, res) => {
-  const doc = new PDFDocument({ size: 'A5', margins: { top: 20, bottom: 10, left: 20, right: 20 }, autoFirstPage: true });
-  
-  res.setHeader('Content-Type', 'application/pdf');
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const safeName = salaryData.teacher?.fullName?.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee';
-  const tId = salaryData.teacher?.teacherId || 'NoID';
-  const monthName = monthNames[salaryData.month - 1] || salaryData.month;
-  res.setHeader('Content-Disposition', `attachment; filename=salary-slip-${tId}-${safeName}-${monthName}-${salaryData.year}.pdf`);
-  doc.pipe(res);
-
+const buildSalarySlipPage = (doc, salaryData) => {
   const teacher = salaryData.teacher;
   const age = calculateAge(teacher.dob);
   const service = calculateAge(teacher.joiningDate);
@@ -271,6 +261,13 @@ export const generateSalarySlipPDF = (salaryData, res) => {
   doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8.5).text("Net Payable Salary Amount :", col1, rowY);
   doc.text(`Rs. ${salaryData.payableSalary}   /=`, 270, rowY, { align: 'right', width: 90 });
 
+  // Salary in Words — on the left side beside the signature
+  const salaryInWords = numberToWords(Math.round(salaryData.payableSalary || 0));
+  doc.fillColor(darkTextColor).font('Helvetica-Bold').fontSize(7);
+  doc.text("Salary in Words:", 22, 518);
+  doc.font('Helvetica').fontSize(6.5);
+  doc.text(`Rupees ${salaryInWords}`, 22, 530, { width: 240 });
+
   // Principal Signature — fixed at bottom of A5
   if (fs.existsSync(signaturePath)) {
     doc.image(signaturePath, 305, 515, { width: 55 }); 
@@ -287,6 +284,56 @@ export const generateSalarySlipPDF = (salaryData, res) => {
   // Outer border
   doc.rect(15, 15, 390, 580).lineWidth(1.5).strokeColor(primaryColor).stroke();
 
+};
+
+export const generateSalarySlipPDF = (salaryData, res) => {
+  const doc = new PDFDocument({ size: 'A5', margins: { top: 20, bottom: 10, left: 20, right: 20 }, autoFirstPage: true });
+  
+  res.setHeader('Content-Type', 'application/pdf');
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const safeName = salaryData.teacher?.fullName?.replace(/[^a-zA-Z0-9]/g, '_') || 'Employee';
+  const tId = salaryData.teacher?.teacherId || 'NoID';
+  const monthName = monthNames[salaryData.month - 1] || salaryData.month;
+  const fileName = `salary-slip-${tId}-${safeName}-${monthName}-${salaryData.year}.pdf`;
+  res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+  
+  const rootDir = path.join(__dirname, '../../');
+  const salariesDir = path.join(rootDir, 'Salaries', `${monthName}_${salaryData.year}`);
+  if (!fs.existsSync(salariesDir)) {
+    fs.mkdirSync(salariesDir, { recursive: true });
+  }
+  const filePath = path.join(salariesDir, fileName);
+  
+  doc.pipe(fs.createWriteStream(filePath));
+  doc.pipe(res);
+
+  buildSalarySlipPage(doc, salaryData);
+  doc.end();
+};
+
+export const generateBulkSalarySlipsPDF = (salaries, res, month, year) => {
+  const doc = new PDFDocument({ size: 'A5', margins: { top: 20, bottom: 10, left: 20, right: 20 }, autoFirstPage: true });
+  
+  res.setHeader('Content-Type', 'application/pdf');
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const monthName = monthNames[month - 1] || month;
+  const fileName = `All-Salary-Slips-${monthName}-${year}.pdf`;
+  res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+  
+  const rootDir = path.join(__dirname, '../../');
+  const salariesDir = path.join(rootDir, 'Salaries', `${monthName}_${year}`);
+  if (!fs.existsSync(salariesDir)) {
+    fs.mkdirSync(salariesDir, { recursive: true });
+  }
+  const filePath = path.join(salariesDir, fileName);
+  
+  doc.pipe(fs.createWriteStream(filePath));
+  doc.pipe(res);
+
+  salaries.forEach((salary, index) => {
+    if (index > 0) doc.addPage();
+    buildSalarySlipPage(doc, salary);
+  });
   doc.end();
 };
 

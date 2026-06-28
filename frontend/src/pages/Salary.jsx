@@ -14,12 +14,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function Salary() {
   const [salaries, setSalaries] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [previewData, setPreviewData] = useState(null);
+  const [previewData, setPreviewData] = useState([]);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [teacherFilter, setTeacherFilter] = useState('Active');
   const [selectedTeachers, setSelectedTeachers] = useState([]);
+  const [selectedSalaryIds, setSelectedSalaryIds] = useState([]);
 
   // Salary components from settings
   const [salaryComponents, setSalaryComponents] = useState([]);
@@ -27,6 +28,9 @@ export default function Salary() {
   const [teacherComponents, setTeacherComponents] = useState({});
   // Which teacher's components are expanded
   const [expandedTeacher, setExpandedTeacher] = useState(null);
+  
+  const [teacherAdvances, setTeacherAdvances] = useState({});
+  const [advanceInput, setAdvanceInput] = useState({ teacherId: '', amount: '' });
 
   const [formData, setFormData] = useState({
     month: new Date().getMonth() + 1,
@@ -44,6 +48,7 @@ export default function Salary() {
       setIsLoading(true);
       const res = await api.get(`/salary?month=${formData.month}&year=${formData.year}`);
       setSalaries(res.data.data);
+      setSelectedSalaryIds([]);
     } catch (error) {
       showError('Failed to load salaries');
     } finally {
@@ -115,28 +120,29 @@ export default function Salary() {
 
   const fetchPreview = async () => {
     if (ungeneratedSelected.length === 0) {
-      setPreviewData(null);
+      setPreviewData([]);
       return;
     }
     try {
       setIsLoadingPreview(true);
-      const tId = ungeneratedSelected[0];
       
-      const [res] = await Promise.all([
+      const promises = ungeneratedSelected.map(tId => 
         api.post('/salary/preview', {
           teacherId: tId,
           month: formData.month,
           year: formData.year,
-          advance: formData.advance,
+          advance: teacherAdvances[tId] || 0,
           bonus: formData.bonus,
           juneSalary: formData.juneSalary,
           julySalary: formData.julySalary,
           selectedComponents: getSelectedComponentsForTeacher(tId),
-        }),
-        new Promise(resolve => setTimeout(resolve, 600)) // Artificial delay for UX
-      ]);
+        })
+      );
 
-      setPreviewData(res.data.data);
+      const responses = await Promise.all([...promises, new Promise(resolve => setTimeout(resolve, 600))]);
+      
+      const previewResults = responses.slice(0, -1).map(res => res.data.data);
+      setPreviewData(previewResults);
     } catch (error) {
       console.error(error);
     } finally {
@@ -144,7 +150,7 @@ export default function Salary() {
     }
   };
 
-  useEffect(() => { fetchPreview(); }, [selectedTeachers, formData, teacherComponents]);
+  useEffect(() => { fetchPreview(); }, [selectedTeachers, formData, teacherComponents, teacherAdvances]);
 
   const toggleTeacher = (id) => {
     if (isGenerated(id)) return;
@@ -179,7 +185,7 @@ export default function Salary() {
             teacherId: tId,
             month: formData.month,
             year: formData.year,
-            advance: formData.advance,
+            advance: teacherAdvances[tId] || 0,
             bonus: formData.bonus,
             juneSalary: formData.juneSalary,
             julySalary: formData.julySalary,
@@ -219,6 +225,32 @@ export default function Salary() {
     }
   };
 
+  const toggleSelectSalary = (id) => {
+    setSelectedSalaryIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAllSalaries = () => {
+    // Only select salaries that are not PAID, as PAID cannot be deleted (based on backend logic, but we can just select all and let backend skip, but better UI to check here too if needed. Actually backend handles skipping. Let's just select all)
+    if (selectedSalaryIds.length === salaries.length) {
+      setSelectedSalaryIds([]);
+    } else {
+      setSelectedSalaryIds(salaries.map(s => s._id));
+    }
+  };
+
+  const handleBulkDeleteSalaries = async () => {
+    const isConfirmed = await confirmDelete(`${selectedSalaryIds.length} salary record(s)`);
+    if (!isConfirmed) return;
+    try {
+      const res = await api.post('/salary/bulk-delete', { ids: selectedSalaryIds });
+      showSuccess(res.data.message);
+      setSelectedSalaryIds([]);
+      fetchSalaries();
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to bulk delete salaries');
+    }
+  };
+
   const handleStatusChange = async (id, status) => {
     try {
       await api.put(`/salary/${id}/status`, { status });
@@ -229,30 +261,57 @@ export default function Salary() {
     }
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (salaries.length === 0) { showError('No data to export'); return; }
-    const worksheetData = salaries.map((s, i) => ({
-      '#': i + 1,
-      'Teacher ID': s.teacher?.teacherId || 'N/A',
-      'Teacher': s.teacher?.fullName || 'N/A',
-      'Basic': s.basicSalary,
-      'Days': s.totalWorkingDays,
-      'Absences': s.absentDays,
-      'Lates': s.lateDays,
-      'Gross Pay': s.grossPay,
-      'Allowances': s.totalAllowance,
-      'Custom Additions': s.customAdditions || 0,
-      'Custom Deductions': s.customDeductions || 0,
-      'Tax': s.taxAmount || 0,
-      'Additions': s.totalAdditions,
-      'Payable Salary': s.payableSalary,
-      'Status': s.status?.toUpperCase(),
-    }));
-    const ws = XLSX.utils.json_to_sheet(worksheetData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Salary');
-    XLSX.writeFile(wb, `Salary_${monthNames[formData.month - 1]}_${formData.year}.xlsx`);
-    showSuccess('Excel downloaded!');
+    try {
+      const response = await api.get(`/salary/bulk/excel?month=${formData.month}&year=${formData.year}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Salaries-${monthNames[formData.month - 1]}-${formData.year}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      showSuccess('Excel downloaded and saved to Project Root/Excel_Reports!');
+    } catch (error) {
+      showError('Failed to generate Excel report');
+    }
+  };
+
+  const downloadAllPDF = async () => {
+    if (salaries.length === 0) { showError('No salaries to download'); return; }
+    try {
+      const response = await api.get(`/salary/bulk/pdf?month=${formData.month}&year=${formData.year}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `All-Salary-Slips-${monthNames[formData.month - 1]}-${formData.year}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess('All salary slips downloaded as PDF!');
+    } catch (error) {
+      showError('Failed to download bulk PDF');
+    }
+  };
+
+  const downloadExcelFromServer = async () => {
+    if (salaries.length === 0) { showError('No salaries to download'); return; }
+    try {
+      const response = await api.get(`/salary/bulk/excel?month=${formData.month}&year=${formData.year}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Salaries-${monthNames[formData.month - 1]}-${formData.year}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess('Excel downloaded & saved on server!');
+    } catch (error) {
+      showError('Failed to download Excel');
+    }
   };
 
   const sendWhatsApp = (row) => {
@@ -283,6 +342,25 @@ export default function Salary() {
   };
 
   const columns = [
+    { 
+      header: (
+        <button onClick={toggleSelectAllSalaries} className="text-lg flex items-center justify-center p-1">
+          {selectedSalaryIds.length > 0 && selectedSalaryIds.length === salaries.length ? 
+            <FiCheckSquare className="text-primary-500" /> : 
+            <FiSquare className="text-slate-400" />
+          }
+        </button>
+      ), 
+      key: 'select', 
+      render: (r) => {
+        const isSelected = selectedSalaryIds.includes(r._id);
+        return (
+          <button onClick={() => toggleSelectSalary(r._id)} className="text-lg flex items-center justify-center p-1">
+            {isSelected ? <FiCheckSquare className="text-primary-500" /> : <FiSquare className="text-slate-300 dark:text-slate-600 hover:text-slate-400" />}
+          </button>
+        );
+      }
+    },
     { header: 'Teacher', key: 'teacher', render: (r) => (
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex items-center justify-center text-xs">
@@ -474,8 +552,41 @@ export default function Salary() {
               </div>
 
               <div className="space-y-3 mb-4">
-                <Input label="Advance Deduction (PKR)" type="number" placeholder="0" value={formData.advance || ''} onChange={(e) => setFormData({...formData, advance: Number(e.target.value)})} />
-                <Input label="Bonus (PKR)" type="number" placeholder="0" value={formData.bonus || ''} onChange={(e) => setFormData({...formData, bonus: Number(e.target.value)})} />
+                <div className="bg-slate-50 dark:bg-dark-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Specific Advance Deduction</label>
+                  <div className="flex flex-wrap gap-2">
+                    <select className="input-field text-sm !py-1.5 flex-1 min-w-[140px] bg-white dark:bg-dark-800" value={advanceInput.teacherId} onChange={e => setAdvanceInput({...advanceInput, teacherId: e.target.value})}>
+                      <option value="">Select Teacher...</option>
+                      {teachers.map(t => <option key={t._id} value={t._id}>{t.fullName}</option>)}
+                    </select>
+                    <input type="number" className="input-field text-sm !py-1.5 w-24 flex-shrink-0 bg-white dark:bg-dark-800" placeholder="Amount" value={advanceInput.amount} onChange={e => setAdvanceInput({...advanceInput, amount: e.target.value})} />
+                    <Button size="sm" type="button" className="flex-shrink-0" onClick={() => {
+                      if(advanceInput.teacherId && advanceInput.amount) {
+                        setTeacherAdvances({...teacherAdvances, [advanceInput.teacherId]: Number(advanceInput.amount)});
+                        setAdvanceInput({teacherId: '', amount: ''});
+                      }
+                    }}>Add</Button>
+                  </div>
+                  {Object.keys(teacherAdvances).length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {Object.entries(teacherAdvances).map(([tId, amt]) => (
+                        <div key={tId} className="flex justify-between items-center bg-white dark:bg-dark-800 px-2 py-1.5 rounded border border-slate-100 dark:border-slate-700 text-xs shadow-sm">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">{teachers.find(t => t._id === tId)?.fullName || 'Unknown'}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-red-500 font-bold">-{amt} PKR</span>
+                            <button type="button" onClick={() => {
+                              const newAdvs = {...teacherAdvances};
+                              delete newAdvs[tId];
+                              setTeacherAdvances(newAdvs);
+                            }} className="text-slate-400 hover:text-red-500 transition-colors"><FiTrash2 className="w-3.5 h-3.5"/></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Input label="Global Bonus (PKR)" type="number" placeholder="0" value={formData.bonus || ''} onChange={(e) => setFormData({...formData, bonus: Number(e.target.value)})} />
                 
                 {formData.month === 12 && (
                   <Input label="June Salary (Override)" type="number" placeholder="Auto calculated if 12+ months" value={formData.juneSalary || ''} onChange={(e) => setFormData({...formData, juneSalary: Number(e.target.value)})} />
@@ -545,17 +656,11 @@ export default function Salary() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          {previewData && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-              <Card glass className="border-blue-200 dark:border-blue-900/50 shadow-blue-500/5 bg-gradient-to-br from-white to-blue-50/50 dark:from-dark-800 dark:to-blue-900/10">
-                <CardBody className="p-5">
-                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-blue-100 dark:border-white/5">
-                    <h3 className="text-sm font-bold text-blue-800 dark:text-blue-300 font-display flex items-center gap-2">
-                      <FiDollarSign /> Live Calculation Preview
-                    </h3>
-                    <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">For: {previewData.teacherName}</span>
-                  </div>
-                  {isLoadingPreview ? (
+          {(previewData.length > 0 || isLoadingPreview) && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden space-y-4">
+              {isLoadingPreview ? (
+                <Card glass className="border-blue-200 dark:border-blue-900/50 shadow-blue-500/5 bg-gradient-to-br from-white to-blue-50/50 dark:from-dark-800 dark:to-blue-900/10">
+                  <CardBody className="p-5">
                     <div className="py-12 text-center text-blue-500 flex flex-col items-center justify-center">
                       <div className="relative w-12 h-12 flex items-center justify-center mb-3">
                         <div className="absolute inset-0 border-2 border-blue-200 dark:border-blue-900 rounded-full"></div>
@@ -564,56 +669,84 @@ export default function Salary() {
                       </div>
                       <span className="text-xs font-semibold text-blue-400 animate-pulse uppercase tracking-widest">Calculating...</span>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
-                      <div className="space-y-2">
-                        <div className="flex justify-between"><span className="text-slate-500">Basic Salary</span><span className="font-semibold">{formatCurrency(previewData.basicSalary)}</span></div>
-                        <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Absences ({previewData.attendanceStats.absent} days)</span><span className="font-semibold">{formatCurrency(previewData.absenceDeduction)}</span></div>
-                        <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Lates ({previewData.attendanceStats.late} days = {previewData.absenceDueToLate} abs)</span><span className="font-semibold">{formatCurrency(previewData.lateAbsenceDeduction)}</span></div>
-                        <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Advance</span><span className="font-semibold">{formatCurrency(previewData.advance)}</span></div>
-                        <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-white/5"><span className="font-bold text-slate-700 dark:text-slate-300">Gross Pay</span><span className="font-bold text-slate-800 dark:text-white">{formatCurrency(previewData.grossPay)}</span></div>
+                  </CardBody>
+                </Card>
+              ) : (
+                previewData.map((data, index) => (
+                  <Card key={index} glass className="border-blue-200 dark:border-blue-900/50 shadow-blue-500/5 bg-gradient-to-br from-white to-blue-50/50 dark:from-dark-800 dark:to-blue-900/10">
+                    <CardBody className="p-5">
+                      <div className="flex items-center justify-between mb-4 pb-3 border-b border-blue-100 dark:border-white/5">
+                        <h3 className="text-sm font-bold text-blue-800 dark:text-blue-300 font-display flex items-center gap-2">
+                          <FiDollarSign /> Live Calculation Preview
+                        </h3>
+                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">For: {data.teacherName}</span>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-emerald-600"><span className="text-emerald-500/70 text-xs">+ Attendance Allowance</span><span className="font-semibold">{formatCurrency(previewData.attendanceAllowance)}</span></div>
-                        <div className="flex justify-between text-emerald-600"><span className="text-emerald-500/70 text-xs">+ Punctuality Allowance</span><span className="font-semibold">{formatCurrency(previewData.punctualityAllowance)}</span></div>
-                        
-                        {/* Custom components from settings */}
-                        {previewData.appliedComponents && previewData.appliedComponents.map((comp, ci) => (
-                          <div key={ci} className={`flex justify-between ${comp.type === 'addition' ? 'text-emerald-600' : 'text-red-500'}`}>
-                            <span className={`${comp.type === 'addition' ? 'text-emerald-500/70' : 'text-red-400/70'} text-xs`}>
-                              {comp.type === 'addition' ? '+' : '-'} {comp.name} {comp.isPercentage ? `(${comp.originalAmount}%)` : ''}
-                            </span>
-                            <span className="font-semibold">{formatCurrency(comp.calculatedAmount)}</span>
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+                        <div className="space-y-2">
+                          <div className="flex justify-between"><span className="text-slate-500">Basic Salary</span><span className="font-semibold">{formatCurrency(data.basicSalary)}</span></div>
+                          <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Absences ({data.attendanceStats.absent} days)</span><span className="font-semibold">{formatCurrency(data.absenceDeduction)}</span></div>
+                          <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Lates ({data.attendanceStats.late} days = {data.absenceDueToLate} abs)</span><span className="font-semibold">{formatCurrency(data.lateAbsenceDeduction)}</span></div>
+                          <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Advance</span><span className="font-semibold">{formatCurrency(data.advance)}</span></div>
+                          <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-white/5"><span className="font-bold text-slate-700 dark:text-slate-300">Gross Pay</span><span className="font-bold text-slate-800 dark:text-white">{formatCurrency(data.grossPay)}</span></div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-emerald-600"><span className="text-emerald-500/70 text-xs">+ Attendance Allowance</span><span className="font-semibold">{formatCurrency(data.attendanceAllowance)}</span></div>
+                          <div className="flex justify-between text-emerald-600"><span className="text-emerald-500/70 text-xs">+ Punctuality Allowance</span><span className="font-semibold">{formatCurrency(data.punctualityAllowance)}</span></div>
+                          
+                          {/* Custom components from settings */}
+                          {data.appliedComponents && data.appliedComponents.map((comp, ci) => (
+                            <div key={ci} className={`flex justify-between ${comp.type === 'addition' ? 'text-emerald-600' : 'text-red-500'}`}>
+                              <span className={`${comp.type === 'addition' ? 'text-emerald-500/70' : 'text-red-400/70'} text-xs`}>
+                                {comp.type === 'addition' ? '+' : '-'} {comp.name} {comp.isPercentage ? `(${comp.originalAmount}%)` : ''}
+                              </span>
+                              <span className="font-semibold">{formatCurrency(comp.calculatedAmount)}</span>
+                            </div>
+                          ))}
 
-                        {previewData.taxAmount > 0 && <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Tax</span><span className="font-semibold">{formatCurrency(previewData.taxAmount)}</span></div>}
-                        {previewData.juneSalary > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ June Salary</span><span className="font-semibold">{formatCurrency(previewData.juneSalary)}</span></div>}
-                        {previewData.julySalary > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ July Salary</span><span className="font-semibold">{formatCurrency(previewData.julySalary)}</span></div>}
-                        {previewData.bonus > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ Bonus</span><span className="font-semibold">{formatCurrency(previewData.bonus)}</span></div>}
+                          {data.taxAmount > 0 && <div className="flex justify-between text-red-500"><span className="text-red-400/70 text-xs">- Tax</span><span className="font-semibold">{formatCurrency(data.taxAmount)}</span></div>}
+                          {data.juneSalary > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ June Salary</span><span className="font-semibold">{formatCurrency(data.juneSalary)}</span></div>}
+                          {data.julySalary > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ July Salary</span><span className="font-semibold">{formatCurrency(data.julySalary)}</span></div>}
+                          {data.bonus > 0 && <div className="flex justify-between text-purple-600"><span className="text-purple-500/70 text-xs">+ Bonus</span><span className="font-semibold">{formatCurrency(data.bonus)}</span></div>}
+                        </div>
+                        <div className="col-span-1 sm:col-span-2 bg-blue-100/50 dark:bg-blue-900/20 p-3 rounded-lg flex justify-between items-center mt-2 border border-blue-200 dark:border-blue-800/50">
+                          <span className="font-bold text-blue-900 dark:text-blue-100 text-lg uppercase tracking-wide">Payable Salary</span>
+                          <span className="font-bold text-blue-600 dark:text-blue-400 text-xl">{formatCurrency(data.payableSalary)}</span>
+                        </div>
                       </div>
-                      <div className="col-span-1 sm:col-span-2 bg-blue-100/50 dark:bg-blue-900/20 p-3 rounded-lg flex justify-between items-center mt-2 border border-blue-200 dark:border-blue-800/50">
-                        <span className="font-bold text-blue-900 dark:text-blue-100 text-lg uppercase tracking-wide">Payable Salary</span>
-                        <span className="font-bold text-blue-600 dark:text-blue-400 text-xl">{formatCurrency(previewData.payableSalary)}</span>
-                      </div>
-                    </div>
-                  )}
-                </CardBody>
-              </Card>
+                    </CardBody>
+                  </Card>
+                ))
+              )}
             </motion.div>
           )}
 
           <Card glass className="h-full">
             <CardBody className="p-6 flex flex-col h-full">
-              <div className="flex justify-between items-center mb-5 border-b border-slate-100 dark:border-white/5 pb-4">
+              <div className="flex flex-wrap justify-between items-center mb-5 border-b border-slate-100 dark:border-white/5 pb-4 gap-3">
                 <div>
                   <h3 className="text-lg font-bold text-slate-800 dark:text-white font-display">Salary Records</h3>
                   <p className="text-sm text-slate-500">{monthNames[formData.month - 1]} {formData.year} · {salaries.length} record{salaries.length !== 1 ? 's' : ''}</p>
                 </div>
-                <Button variant="secondary" size="sm" leftIcon={<FiFileText />} onClick={exportToExcel}>
-                  Export
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" size="sm" leftIcon={<FiDownload />} onClick={downloadAllPDF} disabled={salaries.length === 0}>
+                    All PDFs
+                  </Button>
+                  <Button variant="secondary" size="sm" leftIcon={<FiFileText />} onClick={downloadExcelFromServer} disabled={salaries.length === 0}>
+                    Excel
+                  </Button>
+                </div>
               </div>
+
+              {/* Salary Bulk Action Bar */}
+              {selectedSalaryIds.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-xl px-4 py-3 mb-4">
+                  <span className="text-sm font-bold text-primary-700 dark:text-primary-300">{selectedSalaryIds.length} salary record(s) selected</span>
+                  <div className="flex gap-2 ml-auto">
+                    <Button size="sm" variant="secondary" onClick={() => setSelectedSalaryIds([])}>Deselect All</Button>
+                    <Button size="sm" variant="danger" leftIcon={<FiTrash2 />} onClick={handleBulkDeleteSalaries}>Delete Selected</Button>
+                  </div>
+                </div>
+              )}
               
               <div className="flex-1">
                 {salaries.length === 0 && !isLoading ? (

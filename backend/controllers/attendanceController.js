@@ -1,4 +1,5 @@
 import Attendance from '../models/Attendance.js';
+import MonthlyAttendance from '../models/MonthlyAttendance.js';
 import User from '../models/User.js';
 import Settings from '../models/Settings.js';
 
@@ -188,6 +189,45 @@ export const getAttendanceByUser = async (req, res, next) => {
 
     const attendances = await Attendance.find(query).sort({ date: 1 });
     res.status(200).json({ success: true, data: attendances });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMonthlySummary = async (req, res, next) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ success: false, message: 'Month and year are required' });
+
+    const summaries = await MonthlyAttendance.find({ month, year });
+    res.status(200).json({ success: true, data: summaries });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const saveMonthlySummary = async (req, res, next) => {
+  try {
+    const { month, year, summaries } = req.body; 
+    // summaries: [{ user, absentCount, lateCount, halfDayCount }]
+
+    if (!month || !year || !summaries || !Array.isArray(summaries)) {
+      return res.status(400).json({ success: false, message: 'Invalid data' });
+    }
+
+    const operations = summaries.map(s => ({
+      updateOne: {
+        filter: { user: s.user, month, year },
+        update: { $set: { absentCount: s.absentCount, lateCount: s.lateCount, halfDayCount: s.halfDayCount, markedBy: req.user._id } },
+        upsert: true
+      }
+    }));
+
+    if (operations.length > 0) {
+      await MonthlyAttendance.bulkWrite(operations);
+    }
+
+    res.status(200).json({ success: true, message: 'Monthly summaries saved successfully' });
   } catch (error) {
     next(error);
   }

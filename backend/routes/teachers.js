@@ -1,5 +1,5 @@
 import express from 'express';
-import { getTeachers, getTeacher, createTeacher, updateTeacher, deleteTeacher } from '../controllers/teacherController.js';
+import { getTeachers, getTeacher, createTeacher, updateTeacher, deleteTeacher, bulkDeleteTeachers } from '../controllers/teacherController.js';
 import { protect, authorize } from '../middlewares/auth.js';
 import upload from '../middlewares/upload.js';
 import { ROLES } from '../config/constants.js';
@@ -12,6 +12,8 @@ router.use(protect);
 router.route('/')
   .get(authorize(ROLES.PRINCIPAL), getTeachers)
   .post(authorize(ROLES.PRINCIPAL), upload.single('profileImage'), createTeacher);
+
+router.post('/bulk-delete', authorize(ROLES.PRINCIPAL), bulkDeleteTeachers);
 
 router.route('/:id')
   .get(authorize(ROLES.PRINCIPAL, ROLES.TEACHER), getTeacher)
